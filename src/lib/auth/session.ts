@@ -1,4 +1,5 @@
 import { headers } from 'next/headers';
+import { AppError } from '~/lib/errors';
 import { auth } from './server';
 
 export async function getSession() {
@@ -11,7 +12,10 @@ export async function getSession() {
 export async function requireSession() {
   const session = await getSession();
   if (!session) {
-    throw new Error('Unauthorized');
+    throw new AppError({
+      code: 'UNAUTHORIZED',
+      message: 'You must be logged in to access this resource',
+    });
   }
   return session;
 }

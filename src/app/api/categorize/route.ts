@@ -4,12 +4,17 @@ import { db } from '~/db';
 import { categories, videos } from '~/db/schemas';
 import { categorizeVideosInBatches } from '~/lib/ai/categorize';
 import { requireSession } from '~/lib/auth/session';
+import { AppError, createErrorResponse } from '~/lib/errors';
 
 export async function POST(request: Request) {
   try {
     const session = await requireSession();
     const body = await request.json().catch(() => ({}));
-    const force = body.force === true;
+
+    // Validate request body
+    const { force } = await import('~/lib/validations/api').then((mod) =>
+      mod.validateRequestBody(mod.categorizeVideosSchema, body)
+    );
 
     // Get user's categories
     const userCategories = await db
@@ -18,10 +23,10 @@ export async function POST(request: Request) {
       .where(eq(categories.userId, session.user.id));
 
     if (userCategories.length === 0) {
-      return NextResponse.json(
-        { error: 'No categories found. Please create some categories first.' },
-        { status: 400 }
-      );
+      throw new AppError({
+        code: 'BAD_REQUEST',
+        message: 'No categories found. Please create some categories first.',
+      });
     }
 
     // Get the most recent category update time
@@ -123,23 +128,42 @@ export async function POST(request: Request) {
         }
       }
 
+      // Batch all updates together for better performance
+      const updatePromises: Promise<unknown>[] = [];
+
       // Update successfully categorized videos
       for (const [categoryId, videoIds] of updatesByCategory) {
-        await tx
-          .update(videos)
-          .set({ categoryId, lastAnalyzedAt: now })
-          .where(inArray(videos.id, videoIds));
+        // Process in chunks to avoid parameter limits (PostgreSQL limit ~65535 params)
+        const chunkSize = 1000;
+        for (let i = 0; i < videoIds.length; i += chunkSize) {
+          const chunk = videoIds.slice(i, i + chunkSize);
+          updatePromises.push(
+            tx
+              .update(videos)
+              .set({ categoryId, lastAnalyzedAt: now })
+              .where(inArray(videos.id, chunk))
+          );
+        }
         categorizedCount += videoIds.length;
       }
 
       // Update lastAnalyzedAt for failed videos too, to avoid infinite retries
       // This prevents wasting API calls on videos that consistently fail
       if (uncategorizedVideoIds.length > 0) {
-        await tx
-          .update(videos)
-          .set({ lastAnalyzedAt: now })
-          .where(inArray(videos.id, uncategorizedVideoIds));
+        const chunkSize = 1000;
+        for (let i = 0; i < uncategorizedVideoIds.length; i += chunkSize) {
+          const chunk = uncategorizedVideoIds.slice(i, i + chunkSize);
+          updatePromises.push(
+            tx
+              .update(videos)
+              .set({ lastAnalyzedAt: now })
+              .where(inArray(videos.id, chunk))
+          );
+        }
       }
+
+      // Execute all updates in parallel within the transaction
+      await Promise.all(updatePromises);
     });
 
     return NextResponse.json({
@@ -149,18 +173,11 @@ export async function POST(request: Request) {
       message: `Categorized ${categorizedCount} of ${videosToAnalyze.length} videos`,
     });
   } catch (error) {
-    if (error instanceof Error && error.message === 'Unauthorized') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
     console.error('Error categorizing videos:', error);
+    const errorResponse = createErrorResponse(error);
     return NextResponse.json(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : 'Failed to categorize videos',
-      },
-      { status: 500 }
+      { error: errorResponse.message },
+      { status: errorResponse.statusCode }
     );
   }
 }

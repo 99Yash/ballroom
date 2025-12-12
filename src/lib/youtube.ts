@@ -42,8 +42,8 @@ async function createYouTubeClient(
 
   // Create OAuth2 client with credentials
   const oauth2Client = new OAuth2Client(
-    process.env.GOOGLE_CLIENT_ID,
-    process.env.GOOGLE_CLIENT_SECRET
+    process.env.GOOGLE_CLIENT_ID!,
+    process.env.GOOGLE_CLIENT_SECRET!
   );
 
   oauth2Client.setCredentials({
@@ -105,8 +105,36 @@ function transformPlaylistItem(
 }
 
 /**
+ * Transform YouTube API video item to our YouTubeVideo type
+ */
+function transformVideoItem(
+  item: youtube_v3.Schema$Video
+): YouTubeVideo | null {
+  const snippet = item.snippet;
+  if (!snippet || !item.id) {
+    return null;
+  }
+
+  return {
+    youtubeId: item.id,
+    title: snippet.title || 'Untitled',
+    description: snippet.description || '',
+    thumbnailUrl:
+      snippet.thumbnails?.high?.url ||
+      snippet.thumbnails?.medium?.url ||
+      snippet.thumbnails?.default?.url ||
+      '',
+    channelName: snippet.channelTitle || '',
+    channelId: snippet.channelId || '',
+    publishedAt: snippet.publishedAt
+      ? new Date(snippet.publishedAt)
+      : new Date(),
+  };
+}
+
+/**
  * Fetch liked videos from YouTube
- * Uses the special "LL" playlist which contains all liked videos
+ * Uses the videos.list API with myRating='like' parameter (modern approach)
  */
 export async function fetchLikedVideos(
   userId: string,
@@ -119,8 +147,8 @@ export async function fetchLikedVideos(
 }> {
   const yt = await createYouTubeClient(userId);
 
-  const response = await yt.playlistItems.list({
-    playlistId: 'LL',
+  const response = await yt.videos.list({
+    myRating: 'like',
     part: ['snippet'],
     maxResults: Math.min(maxResults, 50),
     pageToken,
@@ -128,7 +156,7 @@ export async function fetchLikedVideos(
 
   const items = response.data.items || [];
   const videos = items
-    .map(transformPlaylistItem)
+    .map(transformVideoItem)
     .filter((v): v is YouTubeVideo => v !== null);
 
   return {

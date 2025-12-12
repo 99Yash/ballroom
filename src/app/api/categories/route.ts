@@ -4,6 +4,7 @@ import { db } from '~/db';
 import { categories, DEFAULT_CATEGORIES } from '~/db/schemas';
 import { validateCategoryName } from '~/lib/ai/categorize';
 import { requireSession } from '~/lib/auth/session';
+import { AppError, createErrorResponse } from '~/lib/errors';
 
 export async function GET() {
   try {
@@ -17,13 +18,10 @@ export async function GET() {
 
     return NextResponse.json({ categories: userCategories });
   } catch (error) {
-    if (error instanceof Error && error.message === 'Unauthorized') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-    console.error('Error fetching categories:', error);
+    const errorResponse = createErrorResponse(error);
     return NextResponse.json(
-      { error: 'Failed to fetch categories' },
-      { status: 500 }
+      { error: errorResponse.message },
+      { status: errorResponse.statusCode }
     );
   }
 }
@@ -32,23 +30,11 @@ export async function POST(request: Request) {
   try {
     const session = await requireSession();
     const body = await request.json();
-    const { name, skipValidation } = body;
 
-    if (!name || typeof name !== 'string') {
-      return NextResponse.json(
-        { error: 'Category name is required' },
-        { status: 400 }
-      );
-    }
-
-    const trimmedName = name.trim();
-
-    if (trimmedName.length < 2 || trimmedName.length > 50) {
-      return NextResponse.json(
-        { error: 'Category name must be between 2 and 50 characters' },
-        { status: 400 }
-      );
-    }
+    // Validate request body
+    const { name: trimmedName, skipValidation } = await import(
+      '~/lib/validations/api'
+    ).then((mod) => mod.validateRequestBody(mod.createCategorySchema, body));
 
     // Check for duplicates
     const existing = await db
@@ -61,10 +47,10 @@ export async function POST(request: Request) {
     );
 
     if (duplicate) {
-      return NextResponse.json(
-        { error: 'A category with this name already exists' },
-        { status: 400 }
-      );
+      throw new AppError({
+        code: 'CONFLICT',
+        message: 'A category with this name already exists',
+      });
     }
 
     // Validate the category name using AI (unless skipped)
@@ -93,13 +79,10 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ category: newCategory });
   } catch (error) {
-    if (error instanceof Error && error.message === 'Unauthorized') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-    console.error('Error creating category:', error);
+    const errorResponse = createErrorResponse(error);
     return NextResponse.json(
-      { error: 'Failed to create category' },
-      { status: 500 }
+      { error: errorResponse.message },
+      { status: errorResponse.statusCode }
     );
   }
 }
