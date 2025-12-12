@@ -1,7 +1,7 @@
-import z from 'zod';
-import { GitHub, Google } from '~/components/ui/icons';
+import { z } from 'zod';
+import { Google } from '~/components/ui/icons';
 
-export const authOptionsSchema = z.enum(['EMAIL', 'GOOGLE', 'GITHUB']);
+export const authOptionsSchema = z.enum(['GOOGLE']);
 export type AuthOptionsType = z.infer<typeof authOptionsSchema>;
 
 export const LOCAL_STORAGE_SCHEMAS = {
@@ -20,15 +20,7 @@ interface OAuthProvider {
   icon?: React.ComponentType<{ className?: string }>;
 }
 
-export const OAUTH_PROVIDERS: Record<
-  Lowercase<Exclude<AuthOptionsType, 'EMAIL'>>,
-  OAuthProvider
-> = {
-  github: {
-    id: 'github',
-    name: 'GitHub',
-    icon: GitHub,
-  },
+export const OAUTH_PROVIDERS: Record<'google', OAuthProvider> = {
   google: {
     id: 'google',
     name: 'Google',

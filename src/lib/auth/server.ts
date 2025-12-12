@@ -8,15 +8,18 @@ export const auth = betterAuth({
     provider: 'pg',
     schema,
   }),
-  emailAndPassword: {
-    enabled: true,
-  },
   socialProviders: {
     google: {
-      display: 'popup',
-      prompt: 'select_account',
       clientId: process.env.GOOGLE_CLIENT_ID!,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+      scope: [
+        'openid',
+        'email',
+        'profile',
+        'https://www.googleapis.com/auth/youtube.readonly',
+      ],
+      accessType: 'offline',
+      prompt: 'consent',
     },
   },
 });

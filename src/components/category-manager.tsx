@@ -1,0 +1,194 @@
+'use client';
+
+import { Plus, Settings2, Trash2 } from 'lucide-react';
+import { useState } from 'react';
+import { Badge } from '~/components/ui/badge';
+import { Button } from '~/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '~/components/ui/dialog';
+import { Input } from '~/components/ui/input';
+import { Spinner } from '~/components/ui/spinner';
+
+interface Category {
+  id: string;
+  name: string;
+  isDefault: boolean;
+}
+
+interface CategoryManagerProps {
+  categories: Category[];
+  onCategoryAdded?: (category: Category) => void;
+  onCategoryDeleted?: (categoryId: string) => void;
+  onCategoriesChanged?: () => void;
+}
+
+export function CategoryManager({
+  categories,
+  onCategoryAdded,
+  onCategoryDeleted,
+  onCategoriesChanged,
+}: CategoryManagerProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [isAdding, setIsAdding] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleAddCategory = async () => {
+    if (!newCategoryName.trim()) return;
+
+    setIsAdding(true);
+    setError(null);
+
+    try {
+      const response = await fetch('/api/categories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newCategoryName.trim() }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.suggestion
+            ? `${data.error}: ${data.reason}. Try "${data.suggestion}" instead.`
+            : data.error
+        );
+      }
+
+      onCategoryAdded?.(data.category);
+      onCategoriesChanged?.();
+      setNewCategoryName('');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to add category');
+    } finally {
+      setIsAdding(false);
+    }
+  };
+
+  const handleDeleteCategory = async (categoryId: string) => {
+    setDeletingId(categoryId);
+
+    try {
+      const response = await fetch(`/api/categories/${categoryId}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to delete category');
+      }
+
+      onCategoryDeleted?.(categoryId);
+      onCategoriesChanged?.();
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : 'Failed to delete category'
+      );
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+      <DialogTrigger asChild>
+        <Button variant="outline" className="gap-2">
+          <Settings2 className="h-4 w-4" />
+          Manage Categories
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Manage Categories</DialogTitle>
+          <DialogDescription>
+            Add or remove categories for organizing your liked videos. AI will
+            use these categories to automatically sort your videos.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          {/* Add new category */}
+          <div className="flex gap-2">
+            <Input
+              placeholder="New category name..."
+              value={newCategoryName}
+              onChange={(e) => setNewCategoryName(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleAddCategory()}
+              disabled={isAdding}
+            />
+            <Button
+              onClick={handleAddCategory}
+              disabled={isAdding || !newCategoryName.trim()}
+              size="icon"
+            >
+              {isAdding ? (
+                <Spinner className="h-4 w-4" />
+              ) : (
+                <Plus className="h-4 w-4" />
+              )}
+            </Button>
+          </div>
+
+          {error && (
+            <p className="text-sm text-destructive animate-in fade-in">
+              {error}
+            </p>
+          )}
+
+          {/* Category list */}
+          <div className="max-h-[300px] space-y-2 overflow-y-auto">
+            {categories.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-4">
+                No categories yet. Add one above!
+              </p>
+            ) : (
+              categories.map((category) => (
+                <div
+                  key={category.id}
+                  className="flex items-center justify-between rounded-lg border bg-card p-3"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium">{category.name}</span>
+                    {category.isDefault && (
+                      <Badge variant="secondary" className="text-xs">
+                        Default
+                      </Badge>
+                    )}
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={() => handleDeleteCategory(category.id)}
+                    disabled={deletingId === category.id}
+                    className="text-muted-foreground hover:text-destructive"
+                  >
+                    {deletingId === category.id ? (
+                      <Spinner className="h-4 w-4" />
+                    ) : (
+                      <Trash2 className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setIsOpen(false)}>
+            Done
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
