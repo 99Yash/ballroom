@@ -3,18 +3,10 @@
 import Image from 'next/image';
 import { Badge } from '~/components/ui/badge';
 import { cn } from '~/lib/utils';
+import type { SerializedVideo } from '~/types/video';
 
 interface VideoCardProps {
-  video: {
-    id: string;
-    youtubeId: string;
-    title: string;
-    description?: string | null;
-    thumbnailUrl?: string | null;
-    channelName?: string | null;
-    categoryName?: string | null;
-    publishedAt?: Date | null;
-  };
+  video: SerializedVideo;
   className?: string;
 }
 

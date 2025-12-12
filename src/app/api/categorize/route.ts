@@ -79,16 +79,36 @@ export async function POST(request: Request) {
       10 // Batch size
     );
 
-    // Create a map for quick lookup
+    // Create a map for quick lookup, filtering out invalid category IDs
+    const validCategoryIds = new Set(userCategories.map((c) => c.id));
+    const invalidCategorizations = categorizations.filter(
+      (c) => !validCategoryIds.has(c.categoryId)
+    );
+
+    if (invalidCategorizations.length > 0) {
+      console.warn(
+        'AI returned invalid category IDs:',
+        invalidCategorizations.map((c) => ({
+          videoId: c.videoId,
+          invalidCategoryId: c.categoryId,
+        }))
+      );
+    }
+
     const categorizationMap = new Map(
-      categorizations.map((c) => [c.videoId, c.categoryId])
+      categorizations
+        .filter((c) => validCategoryIds.has(c.categoryId))
+        .map((c) => [c.videoId, c.categoryId])
     );
 
     // Update videos with their categories
     const now = new Date();
+    let categorizedCount = 0;
 
     await db.transaction(async (tx) => {
+      // Group videos by category for batch updates
       const updatesByCategory = new Map<string, string[]>();
+      const uncategorizedVideoIds: string[] = [];
 
       for (const video of videosToAnalyze) {
         const categoryId = categorizationMap.get(video.id);
@@ -97,21 +117,36 @@ export async function POST(request: Request) {
             updatesByCategory.set(categoryId, []);
           }
           updatesByCategory.get(categoryId)!.push(video.id);
+        } else {
+          // Track videos that couldn't be categorized
+          uncategorizedVideoIds.push(video.id);
         }
       }
 
+      // Update successfully categorized videos
       for (const [categoryId, videoIds] of updatesByCategory) {
         await tx
           .update(videos)
           .set({ categoryId, lastAnalyzedAt: now })
           .where(inArray(videos.id, videoIds));
+        categorizedCount += videoIds.length;
+      }
+
+      // Update lastAnalyzedAt for failed videos too, to avoid infinite retries
+      // This prevents wasting API calls on videos that consistently fail
+      if (uncategorizedVideoIds.length > 0) {
+        await tx
+          .update(videos)
+          .set({ lastAnalyzedAt: now })
+          .where(inArray(videos.id, uncategorizedVideoIds));
       }
     });
 
     return NextResponse.json({
-      categorized: videosToAnalyze.length,
+      categorized: categorizedCount,
       total: videosToAnalyze.length,
-      message: `Categorized ${videosToAnalyze.length} videos`,
+      skipped: videosToAnalyze.length - categorizedCount,
+      message: `Categorized ${categorizedCount} of ${videosToAnalyze.length} videos`,
     });
   } catch (error) {
     if (error instanceof Error && error.message === 'Unauthorized') {

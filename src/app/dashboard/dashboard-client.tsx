@@ -8,18 +8,7 @@ import { SyncButton } from '~/components/sync-button';
 import { Button } from '~/components/ui/button';
 import { VideoCard } from '~/components/video-card';
 import { authClient } from '~/lib/auth/client';
-
-interface Video {
-  id: string;
-  youtubeId: string;
-  title: string;
-  description?: string | null;
-  thumbnailUrl?: string | null;
-  channelName?: string | null;
-  categoryId?: string | null;
-  publishedAt?: Date | null;
-  categoryName?: string | null;
-}
+import type { SerializedVideo } from '~/types/video';
 
 interface Category {
   id: string;
@@ -28,7 +17,7 @@ interface Category {
 }
 
 interface DashboardClientProps {
-  initialVideos: Video[];
+  initialVideos: SerializedVideo[];
   initialCategories: Category[];
   userName: string;
 }
@@ -39,13 +28,13 @@ export function DashboardClient({
   userName,
 }: DashboardClientProps) {
   const router = useRouter();
-  const [videos, setVideos] = useState<Video[]>(initialVideos);
+  const [videos, setVideos] = useState<SerializedVideo[]>(initialVideos);
   const [categories, setCategories] = useState<Category[]>(initialCategories);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
   // Group videos by category
   const videosByCategory = useMemo(() => {
-    const grouped: Record<string, Video[]> = {
+    const grouped: Record<string, SerializedVideo[]> = {
       uncategorized: [],
     };
 

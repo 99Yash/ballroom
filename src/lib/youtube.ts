@@ -54,16 +54,22 @@ async function createYouTubeClient(
 
   // Set up automatic token refresh and persistence
   oauth2Client.on('tokens', async (tokens) => {
-    if (tokens.access_token) {
-      await db
-        .update(account)
-        .set({
-          accessToken: tokens.access_token,
-          accessTokenExpiresAt: tokens.expiry_date
-            ? new Date(tokens.expiry_date)
-            : undefined,
-        })
-        .where(eq(account.id, acc.id));
+    try {
+      if (tokens.access_token) {
+        await db
+          .update(account)
+          .set({
+            accessToken: tokens.access_token,
+            accessTokenExpiresAt: tokens.expiry_date
+              ? new Date(tokens.expiry_date)
+              : undefined,
+          })
+          .where(eq(account.id, acc.id));
+      }
+    } catch (error) {
+      console.error('Failed to persist refreshed token:', error);
+      // Note: Consider implementing retry logic or alerting for production
+      // Throwing here would interrupt the OAuth flow, so we log instead
     }
   });
 

@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { db } from '~/db';
 import { categories, videos } from '~/db/schemas';
 import { getSession } from '~/lib/auth/session';
+import { serializeVideo } from '~/types/video';
 import { DashboardClient } from './dashboard-client';
 
 export default async function DashboardPage() {
@@ -37,11 +38,14 @@ export default async function DashboardPage() {
     .where(eq(categories.userId, session.user.id))
     .orderBy(categories.createdAt);
 
+  // Serialize videos for client (convert Date objects to ISO strings)
+  const serializedVideos = userVideos.map(serializeVideo);
+
   return (
     <DashboardClient
-      initialVideos={userVideos}
+      initialVideos={serializedVideos}
       initialCategories={userCategories}
-      userName={session.user.name}
+      userName={session.user.name ?? session.user.email}
     />
   );
 }
