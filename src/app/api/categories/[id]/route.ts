@@ -4,11 +4,17 @@ import { db } from '~/db';
 import { categories } from '~/db/schemas';
 import { requireSession } from '~/lib/auth/session';
 import { AppError, createErrorResponse } from '~/lib/errors';
+import { logger } from '~/lib/logger';
+import {
+  updateCategorySchema,
+  validateRequestBody,
+} from '~/lib/validations/api';
 
 export async function DELETE(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const startTime = Date.now();
   try {
     const session = await requireSession();
     const { id } = await params;
@@ -30,9 +36,20 @@ export async function DELETE(
     // Videos with this category will have categoryId set to null (onDelete: 'set null')
     await db.delete(categories).where(eq(categories.id, id));
 
+    logger.api('DELETE', `/api/categories/${id}`, {
+      userId: session.user.id,
+      duration: Date.now() - startTime,
+      status: 200,
+    });
+
     return NextResponse.json({ success: true });
   } catch (error) {
     const errorResponse = createErrorResponse(error);
+    logger.api('DELETE', `/api/categories/${id}`, {
+      duration: Date.now() - startTime,
+      status: errorResponse.statusCode,
+      error: error instanceof Error ? error : undefined,
+    });
     return NextResponse.json(
       { error: errorResponse.message },
       { status: errorResponse.statusCode }
@@ -44,14 +61,16 @@ export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const startTime = Date.now();
   try {
     const session = await requireSession();
     const { id } = await params;
     const body = await request.json();
 
     // Validate request body
-    const { name: trimmedName } = await import('~/lib/validations/api').then(
-      (mod) => mod.validateRequestBody(mod.updateCategorySchema, body)
+    const { name: trimmedName } = validateRequestBody(
+      updateCategorySchema,
+      body
     );
 
     // Verify ownership
@@ -91,9 +110,20 @@ export async function PATCH(
       .where(eq(categories.id, id))
       .returning();
 
+    logger.api('PATCH', `/api/categories/${id}`, {
+      userId: session.user.id,
+      duration: Date.now() - startTime,
+      status: 200,
+    });
+
     return NextResponse.json({ category: updated });
   } catch (error) {
     const errorResponse = createErrorResponse(error);
+    logger.api('PATCH', `/api/categories/${id}`, {
+      duration: Date.now() - startTime,
+      status: errorResponse.statusCode,
+      error: error instanceof Error ? error : undefined,
+    });
     return NextResponse.json(
       { error: errorResponse.message },
       { status: errorResponse.statusCode }

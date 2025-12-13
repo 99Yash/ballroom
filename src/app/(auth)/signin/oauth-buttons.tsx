@@ -1,6 +1,5 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
 import * as React from 'react';
 import { toast } from 'sonner';
 import { Button } from '~/components/ui/button';
@@ -24,7 +23,6 @@ interface OAuthButtonProps {
 }
 
 const OAuthButton: React.FC<OAuthButtonProps> = ({ providerId, className }) => {
-  const router = useRouter();
   const [lastAuthMethod, setLastAuthMethod] =
     React.useState<AuthOptionsType | null>(null);
   const [isLoading, setIsLoading] = React.useState(false);
@@ -60,7 +58,7 @@ const OAuthButton: React.FC<OAuthButtonProps> = ({ providerId, className }) => {
     } finally {
       setIsLoading(false);
     }
-  }, [provider, providerId, router]);
+  }, [provider, providerId]);
 
   if (!provider) {
     return null;

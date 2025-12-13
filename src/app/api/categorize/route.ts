@@ -5,16 +5,20 @@ import { categories, videos } from '~/db/schemas';
 import { categorizeVideosInBatches } from '~/lib/ai/categorize';
 import { requireSession } from '~/lib/auth/session';
 import { AppError, createErrorResponse } from '~/lib/errors';
+import { logger } from '~/lib/logger';
+import {
+  categorizeVideosSchema,
+  validateRequestBody,
+} from '~/lib/validations/api';
 
 export async function POST(request: Request) {
+  const startTime = Date.now();
   try {
     const session = await requireSession();
     const body = await request.json().catch(() => ({}));
 
     // Validate request body
-    const { force } = await import('~/lib/validations/api').then((mod) =>
-      mod.validateRequestBody(mod.categorizeVideosSchema, body)
-    );
+    const { force } = validateRequestBody(categorizeVideosSchema, body);
 
     // Get user's categories
     const userCategories = await db
@@ -91,13 +95,12 @@ export async function POST(request: Request) {
     );
 
     if (invalidCategorizations.length > 0) {
-      console.warn(
-        'AI returned invalid category IDs:',
-        invalidCategorizations.map((c) => ({
+      logger.warn('AI returned invalid category IDs', {
+        invalidCategorizations: invalidCategorizations.map((c) => ({
           videoId: c.videoId,
           invalidCategoryId: c.categoryId,
-        }))
-      );
+        })),
+      });
     }
 
     const categorizationMap = new Map(
@@ -166,14 +169,24 @@ export async function POST(request: Request) {
       await Promise.all(updatePromises);
     });
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       categorized: categorizedCount,
       total: videosToAnalyze.length,
       skipped: videosToAnalyze.length - categorizedCount,
       message: `Categorized ${categorizedCount} of ${videosToAnalyze.length} videos`,
     });
+
+    logger.api('POST', '/api/categorize', {
+      userId: session.user.id,
+      duration: Date.now() - startTime,
+      status: 200,
+    });
+
+    return response;
   } catch (error) {
-    console.error('Error categorizing videos:', error);
+    logger.error('Error categorizing videos', error, {
+      duration: Date.now() - startTime,
+    });
     const errorResponse = createErrorResponse(error);
     return NextResponse.json(
       { error: errorResponse.message },

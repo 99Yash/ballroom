@@ -35,3 +35,14 @@ export const getProviderById = (
 ): OAuthProvider | undefined => {
   return OAUTH_PROVIDERS[id];
 };
+
+export const APP_CONFIG = {
+  youtube: {
+    defaultSyncLimit: 100,
+    maxSyncLimit: 500,
+  },
+  ai: {
+    batchSize: 10,
+    maxRetries: 3,
+  },
+} as const;

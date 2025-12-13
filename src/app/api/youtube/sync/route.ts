@@ -4,18 +4,19 @@ import { db } from '~/db';
 import { videos } from '~/db/schemas';
 import { requireSession } from '~/lib/auth/session';
 import { createErrorResponse } from '~/lib/errors';
+import { logger } from '~/lib/logger';
+import { syncVideosSchema, validateRequestBody } from '~/lib/validations/api';
 import { fetchAllLikedVideos } from '~/lib/youtube';
 import { initializeDefaultCategories } from '../../categories/route';
 
 export async function POST(request: Request) {
+  const startTime = Date.now();
   try {
     const session = await requireSession();
     const body = await request.json().catch(() => ({}));
 
     // Validate request body
-    const { limit } = await import('~/lib/validations/api').then((mod) =>
-      mod.validateRequestBody(mod.syncVideosSchema, body)
-    );
+    const { limit } = validateRequestBody(syncVideosSchema, body);
 
     // Initialize default categories if needed
     await initializeDefaultCategories(session.user.id);
@@ -67,14 +68,24 @@ export async function POST(request: Request) {
       );
     }
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       synced: likedVideos.length,
       new: newVideos.length,
       existing: existingIds.size,
       message: `Synced ${newVideos.length} new videos`,
     });
+
+    logger.api('POST', '/api/youtube/sync', {
+      userId: session.user.id,
+      duration: Date.now() - startTime,
+      status: 200,
+    });
+
+    return response;
   } catch (error) {
-    console.error('Error syncing videos:', error);
+    logger.error('Error syncing videos', error, {
+      duration: Date.now() - startTime,
+    });
     const errorResponse = createErrorResponse(error);
     return NextResponse.json(
       { error: errorResponse.message },

@@ -1,4 +1,5 @@
-import { z } from 'zod';
+import * as z from 'zod/v4';
+import { createValidationError } from '~/lib/utils';
 
 /**
  * API request validation schemas
@@ -50,13 +51,8 @@ export function validateRequestBody<T extends z.ZodType>(
   const result = schema.safeParse(body);
 
   if (!result.success) {
-    const errors = result.error.errors
-      .map((err) => `${err.path.join('.')}: ${err.message}`)
-      .join(', ');
-
-    throw new Error(`Validation failed: ${errors}`);
+    throw createValidationError(result.error.issues);
   }
 
   return result.data;
 }
-

@@ -1,4 +1,5 @@
-import { z } from 'zod';
+import * as z from 'zod/v4';
+import { logger } from './logger';
 
 /**
  * Environment variable schema
@@ -38,11 +39,13 @@ function validateEnv() {
     return envSchema.parse(process.env);
   } catch (error) {
     if (error instanceof z.ZodError) {
-      const missingVars = error.errors
+      const missingVars = error.issues
         .map((err) => `  - ${err.path.join('.')}: ${err.message}`)
         .join('\n');
 
-      console.error('❌ Environment variable validation failed:\n' + missingVars);
+      logger.error('Environment variable validation failed', error, {
+        missingVars,
+      });
       throw new Error('Missing or invalid environment variables');
     }
     throw error;
@@ -59,4 +62,3 @@ export const env = validateEnv();
  * Type-safe environment variables
  */
 export type Env = z.infer<typeof envSchema>;
-

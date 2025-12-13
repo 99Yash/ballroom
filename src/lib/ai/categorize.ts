@@ -1,6 +1,7 @@
 import { openai } from '@ai-sdk/openai';
 import { generateObject } from 'ai';
 import { z } from 'zod';
+import { logger } from '~/lib/logger';
 
 interface VideoForCategorization {
   id: string;
@@ -77,11 +78,16 @@ async function retryWithBackoff<T>(
         maxDelayMs
       );
 
-      console.warn(
+      logger.warn(
         `AI API call failed (attempt ${attempt + 1}/${
           maxRetries + 1
         }). Retrying in ${delay}ms...`,
-        error instanceof Error ? error.message : error
+        {
+          attempt: attempt + 1,
+          maxRetries: maxRetries + 1,
+          delay,
+          error: error instanceof Error ? error.message : error,
+        }
       );
 
       await new Promise((resolve) => setTimeout(resolve, delay));

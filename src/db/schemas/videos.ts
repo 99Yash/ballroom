@@ -1,18 +1,29 @@
-import { boolean, pgTable, text, timestamp, unique } from 'drizzle-orm/pg-core';
+import {
+  boolean,
+  index,
+  pgTable,
+  text,
+  timestamp,
+  unique,
+} from 'drizzle-orm/pg-core';
 import { user } from './auth';
 import { createId, lifecycle_dates } from './helpers';
 
-export const categories = pgTable('categories', {
-  id: text('id')
-    .primaryKey()
-    .$defaultFn(() => createId('cat')),
-  userId: text('user_id')
-    .notNull()
-    .references(() => user.id, { onDelete: 'cascade' }),
-  name: text('name').notNull(),
-  isDefault: boolean('is_default').default(false).notNull(),
-  ...lifecycle_dates,
-});
+export const categories = pgTable(
+  'categories',
+  {
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => createId('cat')),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    isDefault: boolean('is_default').default(false).notNull(),
+    ...lifecycle_dates,
+  },
+  (table) => [index('idx_categories_user_id').on(table.userId)]
+);
 
 export const videos = pgTable(
   'videos',
@@ -38,6 +49,9 @@ export const videos = pgTable(
   },
   (table) => [
     unique('videos_user_youtube_unique').on(table.userId, table.youtubeId),
+    index('idx_videos_user_id').on(table.userId),
+    index('idx_videos_category_id').on(table.categoryId),
+    index('idx_videos_youtube_id').on(table.youtubeId),
   ]
 );
 
@@ -58,3 +72,10 @@ export const DEFAULT_CATEGORIES = [
   'Fitness',
   'Other',
 ] as const;
+
+// Inferred types from Drizzle schemas
+export type DatabaseVideo = typeof videos.$inferSelect;
+export type NewVideo = typeof videos.$inferInsert;
+
+export type DatabaseCategory = typeof categories.$inferSelect;
+export type NewCategory = typeof categories.$inferInsert;

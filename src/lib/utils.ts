@@ -7,9 +7,73 @@ import {
   LocalStorageValue,
 } from './constants';
 import { AppError } from './errors';
+import { logger } from './logger';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
+}
+
+// ============================================================================
+// Generic Serialization Utilities
+// ============================================================================
+
+/**
+ * Type-level transformation: converts Date types to string recursively.
+ * Handles nullability, optionality, arrays, and nested objects.
+ *
+ * @example
+ * type Input = { createdAt: Date; name: string; tags: Date[] };
+ * type Output = Serialize<Input>;
+ * // { createdAt: string; name: string; tags: string[] }
+ */
+export type Serialize<T> = T extends Date
+  ? string
+  : T extends Array<infer U>
+  ? Array<Serialize<U>>
+  : T extends object
+  ? { [K in keyof T]: Serialize<T[K]> }
+  : T;
+
+/**
+ * Serializes a value for JSON/client transport.
+ * Recursively converts Date objects to ISO 8601 strings.
+ * Preserves full type safety through generics.
+ *
+ * @example
+ * const video = { id: '1', publishedAt: new Date(), title: 'Test' };
+ * const serialized = serialize(video);
+ * // { id: '1', publishedAt: '2024-12-13T...', title: 'Test' }
+ * // Type: { id: string; publishedAt: string; title: string }
+ */
+export function serialize<T>(value: T): Serialize<T> {
+  // Handle null/undefined
+  if (value === null || value === undefined) {
+    return value as Serialize<T>;
+  }
+
+  // Handle Date
+  if (value instanceof Date) {
+    return value.toISOString() as Serialize<T>;
+  }
+
+  // Handle Arrays
+  if (Array.isArray(value)) {
+    return value.map((item) => serialize(item)) as Serialize<T>;
+  }
+
+  // Handle Objects (but not special types like RegExp, Map, etc.)
+  if (typeof value === 'object') {
+    const result: Record<string, unknown> = {};
+    for (const key in value) {
+      if (Object.prototype.hasOwnProperty.call(value, key)) {
+        result[key] = serialize((value as Record<string, unknown>)[key]);
+      }
+    }
+    return result as Serialize<T>;
+  }
+
+  // Primitives pass through unchanged
+  return value as Serialize<T>;
 }
 
 export const unknownError = 'Something went wrong. Please try again.';
@@ -34,7 +98,7 @@ export function getErrorMessage(err: unknown): string {
 /**
  * Creates a standardized validation error from Zod issues
  */
-export function createValidationError(issues: z.ZodIssue[]): AppError {
+export function createValidationError(issues: z.core.$ZodIssue[]): AppError {
   const message = issues.map((issue) => issue.message).join(', ');
   return new AppError({
     code: 'UNPROCESSABLE_CONTENT',
@@ -104,19 +168,16 @@ export function setLocalStorageItem<K extends LocalStorageKey>(
     const validationResult = schema.safeParse(value);
 
     if (!validationResult.success) {
-      console.error(
-        `[LocalStorageError] Invalid value for key "${key}":`,
-        validationResult.error.issues
-      );
+      logger.error('Invalid value for LocalStorage key', undefined, {
+        key,
+        issues: validationResult.error.issues,
+      });
       return;
     }
 
     localStorage.setItem(key, JSON.stringify(validationResult.data));
   } catch (error) {
-    console.error(
-      `[LocalStorageError] Failed to set item for key "${key}":`,
-      error
-    );
+    logger.error('Failed to set LocalStorage item', error, { key });
   }
 }
 
@@ -139,8 +200,8 @@ export function getLocalStorageItem<K extends LocalStorageKey>(
   let parsedValue: unknown;
   try {
     parsedValue = JSON.parse(serializedValue);
-  } catch {
-    console.warn(`[LocalStorageError] Failed to parse value for key "${key}"`);
+  } catch (error) {
+    logger.warn('Failed to parse LocalStorage value', { key, error });
     return defaultValue !== undefined ? defaultValue : undefined;
   }
 
@@ -149,10 +210,10 @@ export function getLocalStorageItem<K extends LocalStorageKey>(
     return validationResult.data;
   }
 
-  console.warn(
-    `[LocalStorageValidation] Invalid data for key "${key}":`,
-    validationResult.error.issues
-  );
+  logger.warn('Invalid data in LocalStorage', {
+    key,
+    issues: validationResult.error.issues,
+  });
 
   if (defaultValue !== undefined) {
     const defaultResult = schema.safeParse(defaultValue);
@@ -167,9 +228,6 @@ export function removeLocalStorageItem(key: LocalStorageKey): void {
   try {
     localStorage.removeItem(key);
   } catch (error) {
-    console.error(
-      `[LocalStorageError] Failed to remove item for key "${key}":`,
-      error
-    );
+    logger.error('Failed to remove LocalStorage item', error, { key });
   }
 }

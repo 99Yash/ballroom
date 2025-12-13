@@ -3,6 +3,7 @@ import { and, eq } from 'drizzle-orm';
 import { OAuth2Client } from 'google-auth-library';
 import { db } from '~/db';
 import { account } from '~/db/schemas';
+import { logger } from '~/lib/logger';
 
 export interface YouTubeVideo {
   youtubeId: string;
@@ -67,7 +68,10 @@ async function createYouTubeClient(
           .where(eq(account.id, acc.id));
       }
     } catch (error) {
-      console.error('Failed to persist refreshed token:', error);
+      logger.error('Failed to persist refreshed token', error, {
+        userId,
+        accountId: acc.id,
+      });
       // Note: Consider implementing retry logic or alerting for production
       // Throwing here would interrupt the OAuth flow, so we log instead
     }

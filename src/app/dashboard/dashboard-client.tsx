@@ -2,12 +2,21 @@
 
 import { FolderOpen, LogOut, Youtube } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { CategoryManager } from '~/components/category-manager';
 import { SyncButton } from '~/components/sync-button';
 import { Button } from '~/components/ui/button';
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from '~/components/ui/pagination';
 import { VideoCard } from '~/components/video-card';
 import { authClient } from '~/lib/auth/client';
+import { siteConfig } from '~/lib/site';
 import type { SerializedVideo } from '~/types/video';
 
 interface Category {
@@ -17,57 +26,101 @@ interface Category {
 }
 
 interface DashboardClientProps {
-  initialVideos: SerializedVideo[];
   initialCategories: Category[];
   userName: string;
 }
 
 export function DashboardClient({
-  initialVideos,
   initialCategories,
   userName,
 }: DashboardClientProps) {
   const router = useRouter();
-  const [videos, setVideos] = useState<SerializedVideo[]>(initialVideos);
+  const [videos, setVideos] = useState<SerializedVideo[]>([]);
   const [categories, setCategories] = useState<Category[]>(initialCategories);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(0);
+  const [totalCount, setTotalCount] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
+  const limit = 24; // Videos per page
 
-  // Group videos by category
-  const videosByCategory = useMemo(() => {
-    const grouped: Record<string, SerializedVideo[]> = {
-      uncategorized: [],
-    };
+  // Fetch videos from API
+  const fetchVideos = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const params = new URLSearchParams({
+        page: currentPage.toString(),
+        limit: limit.toString(),
+      });
 
-    // Initialize all categories
-    categories.forEach((cat) => {
-      grouped[cat.id] = [];
-    });
-
-    // Group videos
-    videos.forEach((video) => {
-      if (video.categoryId && grouped[video.categoryId]) {
-        grouped[video.categoryId].push(video);
-      } else {
-        grouped.uncategorized.push(video);
+      if (selectedCategory === 'uncategorized') {
+        params.set('uncategorized', 'true');
+      } else if (selectedCategory) {
+        params.set('categoryId', selectedCategory);
       }
-    });
 
-    return grouped;
-  }, [videos, categories]);
+      const response = await fetch(`/api/youtube/videos?${params}`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch videos');
+      }
 
-  // Filter videos based on selected category
-  const filteredVideos = useMemo(() => {
-    if (selectedCategory === null) {
-      return videos;
+      const data = await response.json();
+      setVideos(data.videos || []);
+      setTotalPages(data.pagination?.totalPages || 0);
+      setTotalCount(data.pagination?.totalCount || 0);
+    } catch (error) {
+      console.error('Error fetching videos:', error);
+      setVideos([]);
+    } finally {
+      setIsLoading(false);
     }
-    if (selectedCategory === 'uncategorized') {
-      return videosByCategory.uncategorized;
+  }, [currentPage, selectedCategory, limit]);
+
+  // Fetch videos when page or category changes
+  useEffect(() => {
+    fetchVideos();
+  }, [fetchVideos]);
+
+  // Get category counts (we'll fetch these separately)
+  const [categoryCounts, setCategoryCounts] = useState<Record<string, number>>(
+    {}
+  );
+
+  // Fetch category counts in a single API call
+  const fetchCategoryCounts = useCallback(async () => {
+    try {
+      const response = await fetch('/api/youtube/videos/counts');
+      if (!response.ok) {
+        throw new Error('Failed to fetch category counts');
+      }
+
+      const data = await response.json();
+      const counts: Record<string, number> = {
+        all: data.total || 0,
+        uncategorized: data.uncategorized || 0,
+        ...data.byCategory,
+      };
+
+      setCategoryCounts(counts);
+    } catch (error) {
+      console.error('Error fetching category counts:', error);
     }
-    return videosByCategory[selectedCategory] || [];
-  }, [videos, selectedCategory, videosByCategory]);
+  }, []);
+
+  useEffect(() => {
+    fetchCategoryCounts();
+  }, [fetchCategoryCounts]);
 
   const handleRefresh = () => {
+    fetchVideos();
+    fetchCategoryCounts();
     router.refresh();
+  };
+
+  // Reset to page 1 when category changes
+  const handleCategoryChange = (categoryId: string | null) => {
+    setSelectedCategory(categoryId);
+    setCurrentPage(1);
   };
 
   const handleSignOut = async () => {
@@ -82,16 +135,13 @@ export function DashboardClient({
 
   const handleCategoryDeleted = (categoryId: string) => {
     setCategories((prev) => prev.filter((c) => c.id !== categoryId));
-    // Update videos that had this category
-    setVideos((prev) =>
-      prev.map((v) =>
-        v.categoryId === categoryId
-          ? { ...v, categoryId: null, categoryName: null }
-          : v
-      )
-    );
+    // If viewing the deleted category, switch to "All"
     if (selectedCategory === categoryId) {
-      setSelectedCategory(null);
+      handleCategoryChange(null);
+    } else {
+      // Just refresh the current view
+      fetchVideos();
+      fetchCategoryCounts();
     }
   };
 
@@ -105,7 +155,7 @@ export function DashboardClient({
               <Youtube className="h-5 w-5 text-white" />
             </div>
             <div>
-              <h1 className="text-lg font-semibold">Liked Videos Sorter</h1>
+              <h1 className="text-lg font-semibold">{siteConfig.name}</h1>
               <p className="text-xs text-muted-foreground">
                 Welcome, {userName}
               </p>
@@ -139,12 +189,13 @@ export function DashboardClient({
           <Button
             variant={selectedCategory === null ? 'default' : 'outline'}
             size="sm"
-            onClick={() => setSelectedCategory(null)}
+            onClick={() => handleCategoryChange(null)}
+            disabled={isLoading}
           >
-            All ({videos.length})
+            All ({categoryCounts.all || 0})
           </Button>
           {categories.map((category) => {
-            const count = videosByCategory[category.id]?.length || 0;
+            const count = categoryCounts[category.id] || 0;
             return (
               <Button
                 key={category.id}
@@ -152,33 +203,115 @@ export function DashboardClient({
                   selectedCategory === category.id ? 'default' : 'outline'
                 }
                 size="sm"
-                onClick={() => setSelectedCategory(category.id)}
+                onClick={() => handleCategoryChange(category.id)}
+                disabled={isLoading}
               >
                 {category.name} ({count})
               </Button>
             );
           })}
-          {videosByCategory.uncategorized.length > 0 && (
+          {categoryCounts.uncategorized > 0 && (
             <Button
               variant={
                 selectedCategory === 'uncategorized' ? 'default' : 'outline'
               }
               size="sm"
-              onClick={() => setSelectedCategory('uncategorized')}
+              onClick={() => handleCategoryChange('uncategorized')}
               className="border-dashed"
+              disabled={isLoading}
             >
-              Uncategorized ({videosByCategory.uncategorized.length})
+              Uncategorized ({categoryCounts.uncategorized})
             </Button>
           )}
         </div>
 
-        {/* Videos grid */}
-        {filteredVideos.length > 0 ? (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {filteredVideos.map((video) => (
-              <VideoCard key={video.id} video={video} />
-            ))}
+        {/* Loading state */}
+        {isLoading ? (
+          <div className="flex flex-col items-center justify-center py-20 text-center">
+            <div className="mb-4 h-8 w-8 animate-spin rounded-full border-4 border-muted border-t-primary" />
+            <p className="text-muted-foreground">Loading videos...</p>
           </div>
+        ) : videos.length > 0 ? (
+          <>
+            {/* Videos grid */}
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {videos.map((video) => (
+                <VideoCard key={video.id} video={video} />
+              ))}
+            </div>
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="mt-8 flex items-center justify-center">
+                <Pagination>
+                  <PaginationContent>
+                    <PaginationItem>
+                      <PaginationPrevious
+                        onClick={() =>
+                          setCurrentPage((p) => Math.max(1, p - 1))
+                        }
+                        className={
+                          currentPage === 1
+                            ? 'pointer-events-none opacity-50'
+                            : 'cursor-pointer'
+                        }
+                      />
+                    </PaginationItem>
+
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map(
+                      (page) => {
+                        // Show first page, last page, current page, and pages around current
+                        const showPage =
+                          page === 1 ||
+                          page === totalPages ||
+                          (page >= currentPage - 1 && page <= currentPage + 1);
+
+                        if (!showPage) {
+                          // Show ellipsis for skipped pages
+                          if (
+                            page === currentPage - 2 ||
+                            page === currentPage + 2
+                          ) {
+                            return (
+                              <PaginationItem key={page}>
+                                <span className="px-2">...</span>
+                              </PaginationItem>
+                            );
+                          }
+                          return null;
+                        }
+
+                        return (
+                          <PaginationItem key={page}>
+                            <PaginationLink
+                              onClick={() => setCurrentPage(page)}
+                              isActive={currentPage === page}
+                              className="cursor-pointer"
+                            >
+                              {page}
+                            </PaginationLink>
+                          </PaginationItem>
+                        );
+                      }
+                    )}
+
+                    <PaginationItem>
+                      <PaginationNext
+                        onClick={() =>
+                          setCurrentPage((p) => Math.min(totalPages, p + 1))
+                        }
+                        className={
+                          currentPage === totalPages
+                            ? 'pointer-events-none opacity-50'
+                            : 'cursor-pointer'
+                        }
+                      />
+                    </PaginationItem>
+                  </PaginationContent>
+                </Pagination>
+              </div>
+            )}
+          </>
         ) : (
           <div className="flex flex-col items-center justify-center py-20 text-center">
             <div className="mb-4 rounded-full bg-muted p-4">
@@ -186,7 +319,7 @@ export function DashboardClient({
             </div>
             <h2 className="text-xl font-semibold">No videos yet</h2>
             <p className="mt-2 max-w-md text-muted-foreground">
-              {videos.length === 0
+              {categoryCounts.all === 0
                 ? 'Click "Sync & Categorize" to fetch your liked videos from YouTube and automatically organize them.'
                 : 'No videos match the selected filter.'}
             </p>

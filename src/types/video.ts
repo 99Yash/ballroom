@@ -1,59 +1,49 @@
 /**
  * Video types with proper server/client serialization
+ *
+ * Field selection happens at the query level (SELECT statement).
+ * Serialization just converts Date → string for whatever you pass in.
  */
 
-/**
- * Server-side video type with Date objects (from database)
- */
-export interface Video {
-  id: string;
-  youtubeId: string;
-  title: string;
-  description?: string | null;
-  thumbnailUrl?: string | null;
-  channelName?: string | null;
-  categoryId?: string | null;
-  publishedAt?: Date | null;
-  categoryName?: string | null;
-}
+import type { DatabaseVideo } from '~/db/schemas/videos';
+import { serialize, type Serialize } from '~/lib/utils';
 
 /**
- * Serialized video type for client components (after JSON serialization)
- * Dates are serialized as ISO 8601 strings when passed from server to client
+ * Re-exported from schema - inferred directly from Drizzle table definition
  */
-export interface SerializedVideo {
-  id: string;
-  youtubeId: string;
-  title: string;
-  description?: string | null;
-  thumbnailUrl?: string | null;
-  channelName?: string | null;
-  categoryId?: string | null;
-  publishedAt?: string | null; // ISO 8601 string
-  categoryName?: string | null;
-}
+export type { DatabaseVideo };
 
 /**
- * Helper to serialize a video for client consumption
+ * Server-side video type (with Date objects)
+ * This represents the shape after your SELECT + JOIN query.
+ * Define the fields you want here - they should match your query.
  */
-export function serializeVideo(video: Video): SerializedVideo {
-  return {
-    ...video,
-    publishedAt: video.publishedAt?.toISOString() ?? null,
-  };
-}
+export type Video = Pick<
+  DatabaseVideo,
+  | 'id'
+  | 'youtubeId'
+  | 'title'
+  | 'description'
+  | 'thumbnailUrl'
+  | 'channelName'
+  | 'categoryId'
+  | 'publishedAt'
+> & {
+  categoryName?: string | null; // From join
+};
 
 /**
- * Helper to parse a serialized video back to a Video with Date objects
- * Useful when you need to perform date operations on the client
+ * Client-safe video type (after JSON serialization)
+ * Automatically derived - all Date fields become strings
  */
-export function parseVideo(serialized: SerializedVideo): Video {
-  return {
-    ...serialized,
-    publishedAt: serialized.publishedAt
-      ? new Date(serialized.publishedAt)
-      : null,
-  };
+export type SerializedVideo = Serialize<Video>;
+
+/**
+ * Serialize any object for client consumption.
+ * Just pass your query result - dates get converted automatically.
+ */
+export function serializeVideo<T extends Video>(video: T): Serialize<T> {
+  return serialize(video);
 }
 
 /**

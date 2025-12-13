@@ -15,6 +15,13 @@
       "when": 1764306216148,
       "tag": "0001_little_omega_sentinel",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1765596284797,
+      "tag": "0002_huge_gambit",
+      "breakpoints": true
     }
   ]
 }

@@ -5,8 +5,14 @@ import { categories, DEFAULT_CATEGORIES } from '~/db/schemas';
 import { validateCategoryName } from '~/lib/ai/categorize';
 import { requireSession } from '~/lib/auth/session';
 import { AppError, createErrorResponse } from '~/lib/errors';
+import { logger } from '~/lib/logger';
+import {
+  createCategorySchema,
+  validateRequestBody,
+} from '~/lib/validations/api';
 
 export async function GET() {
+  const startTime = Date.now();
   try {
     const session = await requireSession();
 
@@ -16,9 +22,20 @@ export async function GET() {
       .where(eq(categories.userId, session.user.id))
       .orderBy(categories.createdAt);
 
+    logger.api('GET', '/api/categories', {
+      userId: session.user.id,
+      duration: Date.now() - startTime,
+      status: 200,
+    });
+
     return NextResponse.json({ categories: userCategories });
   } catch (error) {
     const errorResponse = createErrorResponse(error);
+    logger.api('GET', '/api/categories', {
+      duration: Date.now() - startTime,
+      status: errorResponse.statusCode,
+      error: error instanceof Error ? error : undefined,
+    });
     return NextResponse.json(
       { error: errorResponse.message },
       { status: errorResponse.statusCode }
@@ -27,14 +44,16 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const startTime = Date.now();
   try {
     const session = await requireSession();
     const body = await request.json();
 
     // Validate request body
-    const { name: trimmedName, skipValidation } = await import(
-      '~/lib/validations/api'
-    ).then((mod) => mod.validateRequestBody(mod.createCategorySchema, body));
+    const { name: trimmedName, skipValidation } = validateRequestBody(
+      createCategorySchema,
+      body
+    );
 
     // Check for duplicates
     const existing = await db
@@ -77,9 +96,20 @@ export async function POST(request: Request) {
       })
       .returning();
 
+    logger.api('POST', '/api/categories', {
+      userId: session.user.id,
+      duration: Date.now() - startTime,
+      status: 200,
+    });
+
     return NextResponse.json({ category: newCategory });
   } catch (error) {
     const errorResponse = createErrorResponse(error);
+    logger.api('POST', '/api/categories', {
+      duration: Date.now() - startTime,
+      status: errorResponse.statusCode,
+      error: error instanceof Error ? error : undefined,
+    });
     return NextResponse.json(
       { error: errorResponse.message },
       { status: errorResponse.statusCode }

@@ -1,10 +1,14 @@
-import { and, desc, eq, isNull } from 'drizzle-orm';
+import { and, count, desc, eq, isNull } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
 import { db } from '~/db';
 import { categories, videos } from '~/db/schemas';
 import { requireSession } from '~/lib/auth/session';
+import { createErrorResponse } from '~/lib/errors';
+import { logger } from '~/lib/logger';
+import { serializeVideo } from '~/types/video';
 
 export async function GET(request: Request) {
+  const startTime = Date.now();
   try {
     const session = await requireSession();
     const { searchParams } = new URL(request.url);
@@ -18,6 +22,22 @@ export async function GET(request: Request) {
       baseConditions.push(eq(videos.categoryId, categoryId));
     }
 
+    const page = parseInt(searchParams.get('page') || '1', 10);
+    const limit = Math.min(
+      parseInt(searchParams.get('limit') || '50', 10),
+      100
+    );
+    const offset = (page - 1) * limit;
+
+    // Get total count for pagination
+    const [countResult] = await db
+      .select({ count: count() })
+      .from(videos)
+      .where(and(...baseConditions));
+
+    const totalCount = countResult?.count || 0;
+
+    // Fetch videos with only the fields we need (matches Video type)
     const userVideos = await db
       .select({
         id: videos.id,
@@ -26,27 +46,44 @@ export async function GET(request: Request) {
         description: videos.description,
         thumbnailUrl: videos.thumbnailUrl,
         channelName: videos.channelName,
-        channelId: videos.channelId,
         publishedAt: videos.publishedAt,
         categoryId: videos.categoryId,
-        lastAnalyzedAt: videos.lastAnalyzedAt,
-        createdAt: videos.createdAt,
         categoryName: categories.name,
       })
       .from(videos)
       .leftJoin(categories, eq(videos.categoryId, categories.id))
       .where(and(...baseConditions))
-      .orderBy(desc(videos.createdAt));
+      .orderBy(desc(videos.createdAt))
+      .limit(limit)
+      .offset(offset);
 
-    return NextResponse.json({ videos: userVideos });
+    const serializedVideos = userVideos.map(serializeVideo);
+
+    logger.api('GET', '/api/youtube/videos', {
+      userId: session.user.id,
+      duration: Date.now() - startTime,
+      status: 200,
+    });
+
+    return NextResponse.json({
+      videos: serializedVideos,
+      pagination: {
+        page,
+        limit,
+        totalCount,
+        totalPages: Math.ceil(totalCount / limit),
+      },
+    });
   } catch (error) {
-    if (error instanceof Error && error.message === 'Unauthorized') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-    console.error('Error fetching videos:', error);
+    const errorResponse = createErrorResponse(error);
+    logger.api('GET', '/api/youtube/videos', {
+      duration: Date.now() - startTime,
+      status: errorResponse.statusCode,
+      error: error instanceof Error ? error : undefined,
+    });
     return NextResponse.json(
-      { error: 'Failed to fetch videos' },
-      { status: 500 }
+      { error: errorResponse.message },
+      { status: errorResponse.statusCode }
     );
   }
 }

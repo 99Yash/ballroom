@@ -3,6 +3,7 @@ import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { OAuthButtons } from '~/app/(auth)/signin/oauth-buttons';
 import { auth } from '~/lib/auth/server';
+import { siteConfig } from '~/lib/site';
 
 export default async function AuthenticationPage() {
   const session = await auth.api.getSession({
@@ -21,7 +22,7 @@ export default async function AuthenticationPage() {
         </div>
         <div className="space-y-2">
           <h1 className="text-2xl font-semibold tracking-tight">
-            Liked Videos Sorter
+            {siteConfig.name}
           </h1>
           <p className="text-sm text-muted-foreground">
             Sign in with Google to access and organize your YouTube liked videos

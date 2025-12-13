@@ -1,7 +1,7 @@
 export const siteConfig = {
-  name: 'Iris',
-  url: 'https://iris.ygkr.live',
-  ogImage: 'https://iris.ygkr.live/og.png',
+  name: 'Ballroom',
+  url: 'https://ballroom.ygkr.live',
+  ogImage: 'https://ballroom.ygkr.live/og.png',
   description: 'AI-powered organization for your YouTube liked videos',
   links: {
     twitter: 'https://x.com/YashGouravKar1/',
