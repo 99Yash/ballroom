@@ -2,7 +2,6 @@
 
 import * as React from 'react';
 import { toast } from 'sonner';
-import { Button } from '~/components/ui/button';
 import { Spinner } from '~/components/ui/spinner';
 import { authClient } from '~/lib/auth/client';
 import {
@@ -19,10 +18,9 @@ import {
 
 interface OAuthButtonProps {
   providerId: OAuthProviderId;
-  className?: React.ComponentProps<typeof Button>['className'];
 }
 
-const OAuthButton: React.FC<OAuthButtonProps> = ({ providerId, className }) => {
+const OAuthButton: React.FC<OAuthButtonProps> = ({ providerId }) => {
   const [lastAuthMethod, setLastAuthMethod] =
     React.useState<AuthOptionsType | null>(null);
   const [isLoading, setIsLoading] = React.useState(false);
@@ -72,35 +70,35 @@ const OAuthButton: React.FC<OAuthButtonProps> = ({ providerId, className }) => {
     return null;
   };
 
+  const isLastUsed =
+    lastAuthMethod === (provider.id.toUpperCase() as AuthOptionsType);
+
   return (
-    <Button
-      variant="outline"
-      className={`w-full relative ${className}`}
+    <button
       onClick={handleOAuthSignIn}
       disabled={isLoading}
+      className="relative flex w-full items-center justify-center gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm font-medium text-foreground transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
     >
       {renderIcon()}
-      <span className="text-sm">
+      <span>
         {isLoading ? 'Signing in…' : `Continue with ${provider.name}`}
       </span>
       {isLoading ? (
-        <Spinner className="mr-2 bg-background" />
+        <Spinner className="absolute right-4 bg-white" />
       ) : (
-        lastAuthMethod === (provider.id.toUpperCase() as AuthOptionsType) && (
-          <i className="text-xs absolute right-4 text-muted-foreground text-center">
+        isLastUsed && (
+          <span className="absolute right-4 text-xs text-muted-foreground">
             Last used
-          </i>
+          </span>
         )
       )}
-    </Button>
+    </button>
   );
 };
 
-export const OAuthButtons: React.FC<{
-  className?: React.ComponentProps<typeof Button>['className'];
-}> = ({ className }) => {
+export const OAuthButtons: React.FC = () => {
   return (
-    <div className={`space-y-1 ${className}`}>
+    <div className="space-y-2">
       {Object.values(OAUTH_PROVIDERS).map((provider) => (
         <OAuthButton
           key={provider.id}
