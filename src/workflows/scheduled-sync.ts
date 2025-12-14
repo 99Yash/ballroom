@@ -45,11 +45,9 @@ export const hourlySyncSchedule = schedules.task({
 
     // Add tags for filtering and monitoring
     const scheduleDate = new Date(payload.timestamp);
-    await tags.add(
-      'scheduled-sync',
-      `date:${scheduleDate.toISOString().split('T')[0]}`, // YYYY-MM-DD
-      `hour:${scheduleDate.getUTCHours()}` // 0-23
-    );
+    await tags.add('scheduled-sync');
+    await tags.add(`date:${scheduleDate.toISOString().split('T')[0]}`); // YYYY-MM-DD
+    await tags.add(`hour:${scheduleDate.getUTCHours()}`); // 0-23
 
     // Initialize progress tracking
     metadata

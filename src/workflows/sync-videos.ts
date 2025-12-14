@@ -72,7 +72,8 @@ export const initialSyncTask = schemaTask({
     logger.info('Starting initial sync for user', { userId });
 
     // Add tags for filtering and monitoring
-    await tags.add(`user:${userId}`, 'sync-type:initial');
+    await tags.add(`user:${userId}`);
+    await tags.add('sync-type:initial');
 
     // Initialize progress tracking
     metadata
@@ -200,7 +201,8 @@ export const incrementalSyncTask = schemaTask({
     logger.info('Starting incremental sync for user', { userId });
 
     // Add tags for filtering and monitoring
-    await tags.add(`user:${userId}`, 'sync-type:incremental');
+    await tags.add(`user:${userId}`);
+    await tags.add('sync-type:incremental');
 
     // Initialize progress tracking
     metadata
