@@ -1,6 +1,9 @@
 import { openai } from '@ai-sdk/openai';
 import { generateObject } from 'ai';
+import { and, eq, inArray, isNull, lt, or } from 'drizzle-orm';
 import { z } from 'zod';
+import { db } from '~/db';
+import { categories, videos } from '~/db/schemas';
 import { logger } from '~/lib/logger';
 
 interface VideoForCategorization {
@@ -220,17 +223,179 @@ Return a categorization for EVERY video in the input.`,
  * Process videos in batches to avoid token limits
  */
 export async function categorizeVideosInBatches(
-  videos: VideoForCategorization[],
-  categories: Category[],
+  videosToProcess: VideoForCategorization[],
+  categoriesToUse: Category[],
   batchSize: number = 10
 ): Promise<CategorizationResult[]> {
   const results: CategorizationResult[] = [];
 
-  for (let i = 0; i < videos.length; i += batchSize) {
-    const batch = videos.slice(i, i + batchSize);
-    const batchResults = await categorizeVideos(batch, categories);
+  for (let i = 0; i < videosToProcess.length; i += batchSize) {
+    const batch = videosToProcess.slice(i, i + batchSize);
+    const batchResults = await categorizeVideos(batch, categoriesToUse);
     results.push(...batchResults);
   }
 
   return results;
+}
+
+/**
+ * Result of categorizing user videos
+ */
+export interface CategorizeResult {
+  categorized: number;
+  total: number;
+  skipped: number;
+}
+
+/**
+ * Categorize all uncategorized videos for a user
+ * This is a reusable function that can be called from API routes or background jobs
+ */
+export async function categorizeUserVideos(
+  userId: string,
+  force: boolean = false
+): Promise<CategorizeResult> {
+  // Get user's categories
+  const userCategories = await db
+    .select()
+    .from(categories)
+    .where(eq(categories.userId, userId));
+
+  if (userCategories.length === 0) {
+    logger.warn('No categories found for user', { userId });
+    return { categorized: 0, total: 0, skipped: 0 };
+  }
+
+  // Get the most recent category update time
+  const latestCategoryUpdate = userCategories.reduce((latest, cat) => {
+    const catTime = cat.updatedAt?.getTime() || cat.createdAt.getTime();
+    return catTime > latest ? catTime : latest;
+  }, 0);
+
+  // Get videos that need categorization
+  let videosToAnalyze;
+
+  if (force) {
+    videosToAnalyze = await db
+      .select()
+      .from(videos)
+      .where(eq(videos.userId, userId));
+  } else {
+    videosToAnalyze = await db
+      .select()
+      .from(videos)
+      .where(
+        and(
+          eq(videos.userId, userId),
+          or(
+            isNull(videos.categoryId),
+            isNull(videos.lastAnalyzedAt),
+            lt(videos.lastAnalyzedAt, new Date(latestCategoryUpdate))
+          )
+        )
+      );
+  }
+
+  if (videosToAnalyze.length === 0) {
+    return { categorized: 0, total: 0, skipped: 0 };
+  }
+
+  // Categorize videos using AI
+  const categorizations = await categorizeVideosInBatches(
+    videosToAnalyze.map((v) => ({
+      id: v.id,
+      title: v.title,
+      description: v.description,
+      channelName: v.channelName,
+    })),
+    userCategories.map((c) => ({
+      id: c.id,
+      name: c.name,
+    })),
+    10
+  );
+
+  // Create a map for quick lookup, filtering out invalid category IDs
+  const validCategoryIds = new Set(userCategories.map((c) => c.id));
+  const invalidCategorizations = categorizations.filter(
+    (c) => !validCategoryIds.has(c.categoryId)
+  );
+
+  if (invalidCategorizations.length > 0) {
+    logger.warn('AI returned invalid category IDs', {
+      userId,
+      invalidCount: invalidCategorizations.length,
+    });
+  }
+
+  const categorizationMap = new Map(
+    categorizations
+      .filter((c) => validCategoryIds.has(c.categoryId))
+      .map((c) => [c.videoId, c.categoryId])
+  );
+
+  // Update videos with their categories
+  const now = new Date();
+  let categorizedCount = 0;
+
+  await db.transaction(async (tx) => {
+    const updatesByCategory = new Map<string, string[]>();
+    const uncategorizedVideoIds: string[] = [];
+
+    for (const video of videosToAnalyze) {
+      const categoryId = categorizationMap.get(video.id);
+      if (categoryId) {
+        if (!updatesByCategory.has(categoryId)) {
+          updatesByCategory.set(categoryId, []);
+        }
+        updatesByCategory.get(categoryId)!.push(video.id);
+      } else {
+        uncategorizedVideoIds.push(video.id);
+      }
+    }
+
+    const updatePromises: Promise<unknown>[] = [];
+
+    for (const [categoryId, videoIds] of updatesByCategory) {
+      const chunkSize = 1000;
+      for (let i = 0; i < videoIds.length; i += chunkSize) {
+        const chunk = videoIds.slice(i, i + chunkSize);
+        updatePromises.push(
+          tx
+            .update(videos)
+            .set({ categoryId, lastAnalyzedAt: now })
+            .where(inArray(videos.id, chunk))
+        );
+      }
+      categorizedCount += videoIds.length;
+    }
+
+    if (uncategorizedVideoIds.length > 0) {
+      const chunkSize = 1000;
+      for (let i = 0; i < uncategorizedVideoIds.length; i += chunkSize) {
+        const chunk = uncategorizedVideoIds.slice(i, i + chunkSize);
+        updatePromises.push(
+          tx
+            .update(videos)
+            .set({ lastAnalyzedAt: now })
+            .where(inArray(videos.id, chunk))
+        );
+      }
+    }
+
+    await Promise.all(updatePromises);
+  });
+
+  logger.info('Categorized user videos', {
+    userId,
+    categorized: categorizedCount,
+    total: videosToAnalyze.length,
+    skipped: videosToAnalyze.length - categorizedCount,
+  });
+
+  return {
+    categorized: categorizedCount,
+    total: videosToAnalyze.length,
+    skipped: videosToAnalyze.length - categorizedCount,
+  };
 }

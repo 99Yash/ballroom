@@ -15,9 +15,10 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const startTime = Date.now();
+  const { id } = await params;
+
   try {
     const session = await requireSession();
-    const { id } = await params;
 
     // Verify ownership
     const category = await db
@@ -62,9 +63,10 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const startTime = Date.now();
+  const { id } = await params;
+
   try {
     const session = await requireSession();
-    const { id } = await params;
     const body = await request.json();
 
     // Validate request body

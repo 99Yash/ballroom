@@ -1,13 +1,19 @@
 'use client';
 
-import { RefreshCw, Sparkles } from 'lucide-react';
-import { useState } from 'react';
+import { formatDistanceToNow } from 'date-fns';
+import { Clock, RefreshCw, Sparkles } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
 import { Button } from '~/components/ui/button';
 import { Spinner } from '~/components/ui/spinner';
 
 interface SyncButtonProps {
   onSyncComplete?: (result: { synced: number; new: number }) => void;
   onCategorizeComplete?: (result: { categorized: number }) => void;
+}
+
+interface SyncStatus {
+  lastSyncAt: string | null;
+  totalVideos: number;
 }
 
 export function SyncButton({
@@ -17,6 +23,23 @@ export function SyncButton({
   const [isSyncing, setIsSyncing] = useState(false);
   const [isCategorizing, setIsCategorizing] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
+  const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
+
+  const fetchSyncStatus = useCallback(async () => {
+    try {
+      const response = await fetch('/api/sync-status');
+      if (response.ok) {
+        const data = await response.json();
+        setSyncStatus(data);
+      }
+    } catch {
+      // Silently fail - sync status is optional
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchSyncStatus();
+  }, [fetchSyncStatus]);
 
   const handleSync = async () => {
     setIsSyncing(true);
@@ -37,6 +60,9 @@ export function SyncButton({
       const result = await response.json();
       setStatus(`Synced ${result.new} new videos`);
       onSyncComplete?.(result);
+
+      // Refresh sync status
+      await fetchSyncStatus();
 
       // Auto-categorize after sync
       await handleCategorize();
@@ -80,9 +106,13 @@ export function SyncButton({
 
   const isLoading = isSyncing || isCategorizing;
 
+  const lastSyncText = syncStatus?.lastSyncAt
+    ? formatDistanceToNow(new Date(syncStatus.lastSyncAt), { addSuffix: true })
+    : null;
+
   return (
     <div className="flex flex-col items-start gap-2">
-      <div className="flex gap-2">
+      <div className="flex items-center gap-2">
         <Button onClick={handleSync} disabled={isLoading} className="gap-2">
           {isSyncing ? (
             <Spinner className="h-4 w-4" />
@@ -105,6 +135,13 @@ export function SyncButton({
           )}
           Re-categorize
         </Button>
+
+        {lastSyncText && !isLoading && (
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Clock className="h-3 w-3" />
+            <span>Last sync {lastSyncText}</span>
+          </div>
+        )}
       </div>
 
       {status && (

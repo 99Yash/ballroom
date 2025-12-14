@@ -3,6 +3,7 @@
 import { FolderOpen, LogOut, Youtube } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
+import { toast } from 'sonner';
 import { CategoryManager } from '~/components/category-manager';
 import { SyncButton } from '~/components/sync-button';
 import { Button } from '~/components/ui/button';
@@ -40,7 +41,6 @@ export function DashboardClient({
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(0);
-  const [totalCount, setTotalCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const limit = 24; // Videos per page
 
@@ -67,9 +67,8 @@ export function DashboardClient({
       const data = await response.json();
       setVideos(data.videos || []);
       setTotalPages(data.pagination?.totalPages || 0);
-      setTotalCount(data.pagination?.totalCount || 0);
-    } catch (error) {
-      console.error('Error fetching videos:', error);
+    } catch {
+      toast.error('Failed to fetch videos');
       setVideos([]);
     } finally {
       setIsLoading(false);
@@ -102,8 +101,8 @@ export function DashboardClient({
       };
 
       setCategoryCounts(counts);
-    } catch (error) {
-      console.error('Error fetching category counts:', error);
+    } catch {
+      // Silently fail - category counts are not critical
     }
   }, []);
 

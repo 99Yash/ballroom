@@ -1,8 +1,8 @@
 import { youtube, youtube_v3 } from '@googleapis/youtube';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { OAuth2Client } from 'google-auth-library';
 import { db } from '~/db';
-import { account } from '~/db/schemas';
+import { account, videos } from '~/db/schemas';
 import { logger } from '~/lib/logger';
 
 export interface YouTubeVideo {
@@ -81,34 +81,6 @@ async function createYouTubeClient(
 }
 
 /**
- * Transform YouTube API playlist item to our YouTubeVideo type
- */
-function transformPlaylistItem(
-  item: youtube_v3.Schema$PlaylistItem
-): YouTubeVideo | null {
-  const snippet = item.snippet;
-  if (!snippet || !snippet.resourceId?.videoId) {
-    return null;
-  }
-
-  return {
-    youtubeId: snippet.resourceId.videoId,
-    title: snippet.title || 'Untitled',
-    description: snippet.description || '',
-    thumbnailUrl:
-      snippet.thumbnails?.high?.url ||
-      snippet.thumbnails?.medium?.url ||
-      snippet.thumbnails?.default?.url ||
-      '',
-    channelName: snippet.videoOwnerChannelTitle || snippet.channelTitle || '',
-    channelId: snippet.videoOwnerChannelId || '',
-    publishedAt: snippet.publishedAt
-      ? new Date(snippet.publishedAt)
-      : new Date(),
-  };
-}
-
-/**
  * Transform YouTube API video item to our YouTubeVideo type
  */
 function transformVideoItem(
@@ -181,12 +153,12 @@ export async function fetchAllLikedVideos(
   let pageToken: string | undefined;
 
   do {
-    const { videos, nextPageToken } = await fetchLikedVideos(
+    const { videos: fetchedVideos, nextPageToken } = await fetchLikedVideos(
       userId,
       50,
       pageToken
     );
-    allVideos.push(...videos);
+    allVideos.push(...fetchedVideos);
     pageToken = nextPageToken;
 
     // If we have a limit and we've reached it, stop
@@ -196,4 +168,77 @@ export async function fetchAllLikedVideos(
   } while (pageToken);
 
   return allVideos;
+}
+
+/**
+ * Result of syncing liked videos
+ */
+export interface SyncResult {
+  synced: number;
+  new: number;
+  existing: number;
+}
+
+/**
+ * Sync liked videos from YouTube to the database
+ * This is a reusable function that can be called from API routes or background jobs
+ */
+export async function syncLikedVideosForUser(
+  userId: string,
+  limit?: number
+): Promise<SyncResult> {
+  // Fetch liked videos from YouTube
+  const likedVideos = await fetchAllLikedVideos(userId, limit);
+
+  if (likedVideos.length === 0) {
+    return { synced: 0, new: 0, existing: 0 };
+  }
+
+  // Get existing videos to avoid duplicates
+  const existingVideos = await db
+    .select({ youtubeId: videos.youtubeId })
+    .from(videos)
+    .where(
+      and(
+        eq(videos.userId, userId),
+        inArray(
+          videos.youtubeId,
+          likedVideos.map((v) => v.youtubeId)
+        )
+      )
+    );
+
+  const existingIds = new Set(existingVideos.map((v) => v.youtubeId));
+
+  // Filter to only new videos
+  const newVideos = likedVideos.filter((v) => !existingIds.has(v.youtubeId));
+
+  // Insert new videos
+  if (newVideos.length > 0) {
+    await db.insert(videos).values(
+      newVideos.map((v) => ({
+        userId,
+        youtubeId: v.youtubeId,
+        title: v.title,
+        description: v.description,
+        thumbnailUrl: v.thumbnailUrl,
+        channelName: v.channelName,
+        channelId: v.channelId,
+        publishedAt: v.publishedAt,
+      }))
+    );
+  }
+
+  logger.info('Synced liked videos', {
+    userId,
+    synced: likedVideos.length,
+    new: newVideos.length,
+    existing: existingIds.size,
+  });
+
+  return {
+    synced: likedVideos.length,
+    new: newVideos.length,
+    existing: existingIds.size,
+  };
 }

@@ -1,4 +1,4 @@
-import { count, eq, isNull, sql } from 'drizzle-orm';
+import { count, eq } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
 import { db } from '~/db';
 import { videos } from '~/db/schemas';
@@ -74,4 +74,3 @@ export async function GET() {
     );
   }
 }
-

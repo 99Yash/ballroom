@@ -24,6 +24,9 @@ const envSchema = z.object({
     .min(1, 'BETTER_AUTH_URL is required')
     .optional(),
 
+  // Trigger.dev
+  TRIGGER_SECRET_KEY: z.string().min(1, 'TRIGGER_SECRET_KEY is required'),
+
   // Node Environment
   NODE_ENV: z
     .enum(['development', 'production', 'test'])
