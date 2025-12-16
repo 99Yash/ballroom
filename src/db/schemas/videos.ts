@@ -5,6 +5,7 @@ import {
   text,
   timestamp,
   unique,
+  type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import { user } from './auth';
 import { createId, lifecycle_dates } from './helpers';
@@ -20,9 +21,20 @@ export const categories = pgTable(
       .references(() => user.id, { onDelete: 'cascade' }),
     name: text('name').notNull(),
     isDefault: boolean('is_default').default(false).notNull(),
+    // Subcategory support: parent category reference (self-referencing FK)
+    parentCategoryId: text('parent_category_id').references(
+      (): AnyPgColumn => categories.id,
+      { onDelete: 'cascade' }
+    ),
+    // YouTube playlist export tracking
+    youtubePlaylistId: text('youtube_playlist_id'),
+    lastSyncedAt: timestamp('last_synced_at'),
     ...lifecycle_dates,
   },
-  (table) => [index('idx_categories_user_id').on(table.userId)]
+  (table) => [
+    index('idx_categories_user_id').on(table.userId),
+    index('idx_categories_parent_id').on(table.parentCategoryId),
+  ]
 );
 
 export const videos = pgTable(
