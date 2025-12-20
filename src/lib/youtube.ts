@@ -1,0 +1,255 @@
+import { youtube, youtube_v3 } from '@googleapis/youtube';
+import { and, eq, inArray } from 'drizzle-orm';
+import { OAuth2Client } from 'google-auth-library';
+import { db } from '~/db';
+import { account, videos } from '~/db/schemas';
+import { AUTH_ERROR_TYPES, AuthenticationError } from '~/lib/errors';
+import { logger } from '~/lib/logger';
+
+export interface YouTubeVideo {
+  youtubeId: string;
+  title: string;
+  description: string;
+  thumbnailUrl: string;
+  channelName: string;
+  channelId: string;
+  publishedAt: Date;
+}
+
+/**
+ * Create an authenticated YouTube client for a user
+ */
+async function createYouTubeClient(
+  userId: string
+): Promise<youtube_v3.Youtube> {
+  const userAccount = await db
+    .select()
+    .from(account)
+    .where(and(eq(account.userId, userId), eq(account.providerId, 'google')))
+    .limit(1);
+
+  if (!userAccount.length) {
+    throw new AuthenticationError({
+      message: 'No Google account linked. Please sign in with Google.',
+      authErrorType: AUTH_ERROR_TYPES.NO_ACCOUNT,
+    });
+  }
+
+  const acc = userAccount[0];
+
+  if (!acc.accessToken) {
+    throw new AuthenticationError({
+      message: 'No access token available. Please re-authenticate with Google.',
+      authErrorType: AUTH_ERROR_TYPES.NO_ACCESS_TOKEN,
+    });
+  }
+
+  if (!acc.refreshToken) {
+    throw new AuthenticationError({
+      message:
+        'No refresh token available. Please re-authenticate with Google.',
+      authErrorType: AUTH_ERROR_TYPES.NO_REFRESH_TOKEN,
+    });
+  }
+
+  // Create OAuth2 client with credentials
+  const oauth2Client = new OAuth2Client(
+    process.env.GOOGLE_CLIENT_ID!,
+    process.env.GOOGLE_CLIENT_SECRET!
+  );
+
+  oauth2Client.setCredentials({
+    access_token: acc.accessToken,
+    refresh_token: acc.refreshToken,
+    expiry_date: acc.accessTokenExpiresAt?.getTime(),
+  });
+
+  // Set up automatic token refresh and persistence
+  oauth2Client.on('tokens', async (tokens) => {
+    try {
+      if (tokens.access_token) {
+        await db
+          .update(account)
+          .set({
+            accessToken: tokens.access_token,
+            accessTokenExpiresAt: tokens.expiry_date
+              ? new Date(tokens.expiry_date)
+              : undefined,
+          })
+          .where(eq(account.id, acc.id));
+      }
+    } catch (error) {
+      logger.error('Failed to persist refreshed token', error, {
+        userId,
+        accountId: acc.id,
+      });
+      // Note: Consider implementing retry logic or alerting for production
+      // Throwing here would interrupt the OAuth flow, so we log instead
+    }
+  });
+
+  return youtube({ version: 'v3', auth: oauth2Client });
+}
+
+/**
+ * Transform YouTube API video item to our YouTubeVideo type
+ */
+function transformVideoItem(
+  item: youtube_v3.Schema$Video
+): YouTubeVideo | null {
+  const snippet = item.snippet;
+  if (!snippet || !item.id) {
+    return null;
+  }
+
+  return {
+    youtubeId: item.id,
+    title: snippet.title || 'Untitled',
+    description: snippet.description || '',
+    thumbnailUrl:
+      snippet.thumbnails?.high?.url ||
+      snippet.thumbnails?.medium?.url ||
+      snippet.thumbnails?.default?.url ||
+      '',
+    channelName: snippet.channelTitle || '',
+    channelId: snippet.channelId || '',
+    publishedAt: snippet.publishedAt
+      ? new Date(snippet.publishedAt)
+      : new Date(),
+  };
+}
+
+/**
+ * Fetch liked videos from YouTube
+ * Uses the videos.list API with myRating='like' parameter (modern approach)
+ */
+export async function fetchLikedVideos(
+  userId: string,
+  maxResults: number = 50,
+  pageToken?: string
+): Promise<{
+  videos: YouTubeVideo[];
+  nextPageToken?: string;
+  totalResults: number;
+}> {
+  const yt = await createYouTubeClient(userId);
+
+  const response = await yt.videos.list({
+    myRating: 'like',
+    part: ['snippet'],
+    maxResults: Math.min(maxResults, 50),
+    pageToken,
+  });
+
+  const items = response.data.items || [];
+  const videos = items
+    .map(transformVideoItem)
+    .filter((v): v is YouTubeVideo => v !== null);
+
+  return {
+    videos,
+    nextPageToken: response.data.nextPageToken || undefined,
+    totalResults: response.data.pageInfo?.totalResults || 0,
+  };
+}
+
+/**
+ * Fetch all liked videos (handles pagination)
+ */
+export async function fetchAllLikedVideos(
+  userId: string,
+  limit?: number
+): Promise<YouTubeVideo[]> {
+  const allVideos: YouTubeVideo[] = [];
+  let pageToken: string | undefined;
+
+  do {
+    const { videos: fetchedVideos, nextPageToken } = await fetchLikedVideos(
+      userId,
+      50,
+      pageToken
+    );
+    allVideos.push(...fetchedVideos);
+    pageToken = nextPageToken;
+
+    // If we have a limit and we've reached it, stop
+    if (limit && allVideos.length >= limit) {
+      return allVideos.slice(0, limit);
+    }
+  } while (pageToken);
+
+  return allVideos;
+}
+
+/**
+ * Result of syncing liked videos
+ */
+export interface SyncResult {
+  synced: number;
+  new: number;
+  existing: number;
+}
+
+/**
+ * Sync liked videos from YouTube to the database
+ * This is a reusable function that can be called from API routes or background jobs
+ */
+export async function syncLikedVideosForUser(
+  userId: string,
+  limit?: number
+): Promise<SyncResult> {
+  // Fetch liked videos from YouTube
+  const likedVideos = await fetchAllLikedVideos(userId, limit);
+
+  if (likedVideos.length === 0) {
+    return { synced: 0, new: 0, existing: 0 };
+  }
+
+  // Get existing videos to avoid duplicates
+  const existingVideos = await db
+    .select({ youtubeId: videos.youtubeId })
+    .from(videos)
+    .where(
+      and(
+        eq(videos.userId, userId),
+        inArray(
+          videos.youtubeId,
+          likedVideos.map((v) => v.youtubeId)
+        )
+      )
+    );
+
+  const existingIds = new Set(existingVideos.map((v) => v.youtubeId));
+
+  // Filter to only new videos
+  const newVideos = likedVideos.filter((v) => !existingIds.has(v.youtubeId));
+
+  // Insert new videos
+  if (newVideos.length > 0) {
+    await db.insert(videos).values(
+      newVideos.map((v) => ({
+        userId,
+        youtubeId: v.youtubeId,
+        title: v.title,
+        description: v.description,
+        thumbnailUrl: v.thumbnailUrl,
+        channelName: v.channelName,
+        channelId: v.channelId,
+        publishedAt: v.publishedAt,
+      }))
+    );
+  }
+
+  logger.info('Synced liked videos', {
+    userId,
+    synced: likedVideos.length,
+    new: newVideos.length,
+    existing: existingIds.size,
+  });
+
+  return {
+    synced: likedVideos.length,
+    new: newVideos.length,
+    existing: existingIds.size,
+  };
+}

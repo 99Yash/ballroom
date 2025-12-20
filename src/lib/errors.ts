@@ -73,6 +73,63 @@ export class AppError extends Error {
 }
 
 /**
+ * Authentication error types for OAuth/token-related failures
+ */
+export const AUTH_ERROR_TYPES = {
+  NO_ACCOUNT: 'no_account',
+  NO_ACCESS_TOKEN: 'no_access_token',
+  NO_REFRESH_TOKEN: 'no_refresh_token',
+  TOKEN_EXPIRED: 'token_expired',
+  TOKEN_REFRESH_FAILED: 'token_refresh_failed',
+} as const;
+
+export type AuthErrorType =
+  (typeof AUTH_ERROR_TYPES)[keyof typeof AUTH_ERROR_TYPES];
+
+/**
+ * Specialized error for authentication/OAuth failures
+ * Use this for errors that indicate the user needs to re-authenticate
+ */
+export class AuthenticationError extends AppError {
+  public readonly authErrorType: AuthErrorType;
+
+  constructor(opts: {
+    message: string;
+    authErrorType: AuthErrorType;
+    cause?: unknown;
+  }) {
+    super({
+      message: opts.message,
+      code: 'UNAUTHORIZED',
+      cause: opts.cause,
+    });
+    this.name = 'AuthenticationError';
+    this.authErrorType = opts.authErrorType;
+  }
+
+  /**
+   * Check if this error requires the user to re-authenticate
+   * (as opposed to a temporary failure that might be retried)
+   */
+  requiresReauthentication(): boolean {
+    const reauthTypes: AuthErrorType[] = [
+      AUTH_ERROR_TYPES.NO_ACCOUNT,
+      AUTH_ERROR_TYPES.NO_ACCESS_TOKEN,
+      AUTH_ERROR_TYPES.NO_REFRESH_TOKEN,
+    ];
+    return reauthTypes.includes(this.authErrorType);
+  }
+
+  toJSON() {
+    return {
+      ...super.toJSON(),
+      authErrorType: this.authErrorType,
+      requiresReauthentication: this.requiresReauthentication(),
+    };
+  }
+}
+
+/**
  * Helper function to create a standardized error response
  */
 export function createErrorResponse(

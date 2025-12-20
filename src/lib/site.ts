@@ -1,8 +1,8 @@
 export const siteConfig = {
-  name: 'Olivia',
-  url: 'https://olivia.ygkr.live',
-  ogImage: 'https://olivia.ygkr.live/og.png',
-  description: 'The most sophisticated AI assistant for building your resume',
+  name: 'Ballroom',
+  url: 'https://ballroom.ygkr.live',
+  ogImage: 'https://ballroom.ygkr.live/og.png',
+  description: 'AI-powered organization for your YouTube liked videos',
   links: {
     twitter: 'https://x.com/YashGouravKar1/',
     github: 'https://github.com/99yash',

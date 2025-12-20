@@ -8,6 +8,34 @@
       "when": 1761284814518,
       "tag": "0000_yellow_komodo",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1764306216148,
+      "tag": "0001_little_omega_sentinel",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1765596284797,
+      "tag": "0002_huge_gambit",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1765634213820,
+      "tag": "0003_married_stone_men",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1765886143237,
+      "tag": "0004_spicy_ricochet",
+      "breakpoints": true
     }
   ]
 }

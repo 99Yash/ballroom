@@ -1,7 +1,7 @@
-import z from 'zod';
-import { GitHub, Google } from '~/components/ui/icons';
+import * as z from 'zod/v4';
+import { Google } from '~/components/ui/icons';
 
-export const authOptionsSchema = z.enum(['EMAIL', 'GOOGLE', 'GITHUB']);
+export const authOptionsSchema = z.enum(['GOOGLE']);
 export type AuthOptionsType = z.infer<typeof authOptionsSchema>;
 
 export const LOCAL_STORAGE_SCHEMAS = {
@@ -20,15 +20,7 @@ interface OAuthProvider {
   icon?: React.ComponentType<{ className?: string }>;
 }
 
-export const OAUTH_PROVIDERS: Record<
-  Lowercase<Exclude<AuthOptionsType, 'EMAIL'>>,
-  OAuthProvider
-> = {
-  github: {
-    id: 'github',
-    name: 'GitHub',
-    icon: GitHub,
-  },
+export const OAUTH_PROVIDERS: Record<'google', OAuthProvider> = {
   google: {
     id: 'google',
     name: 'Google',
@@ -43,3 +35,14 @@ export const getProviderById = (
 ): OAuthProvider | undefined => {
   return OAUTH_PROVIDERS[id];
 };
+
+export const APP_CONFIG = {
+  youtube: {
+    defaultSyncLimit: 100,
+    maxSyncLimit: 500,
+  },
+  ai: {
+    batchSize: 10,
+    maxRetries: 3,
+  },
+} as const;
