@@ -21,7 +21,6 @@ interface Category {
 interface CategorizationResult {
   videoId: string;
   categoryId: string;
-  confidence: number;
 }
 
 /**
@@ -182,11 +181,6 @@ export async function categorizeVideos(
               categoryId: z
                 .string()
                 .describe('The category ID that best fits this video'),
-              confidence: z
-                .number()
-                .min(0)
-                .max(1)
-                .describe('Confidence score from 0 to 1'),
             })
           ),
         }),
@@ -209,7 +203,6 @@ Rules:
 - If a video doesn't clearly fit any category, use the "Other" category${
           otherCategory ? ` (ID: ${otherCategory.id})` : ''
         }
-- Assign a confidence score (0-1) based on how certain you are about the categorization
 
 Return a categorization for EVERY video in the input.`,
       }),
