@@ -3,6 +3,7 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { OAuth2Client } from 'google-auth-library';
 import { db } from '~/db';
 import { account, videos } from '~/db/schemas';
+import { AUTH_ERROR_TYPES, AuthenticationError } from '~/lib/errors';
 import { logger } from '~/lib/logger';
 
 export interface YouTubeVideo {
@@ -28,17 +29,27 @@ async function createYouTubeClient(
     .limit(1);
 
   if (!userAccount.length) {
-    throw new Error('No Google account linked');
+    throw new AuthenticationError({
+      message: 'No Google account linked. Please sign in with Google.',
+      authErrorType: AUTH_ERROR_TYPES.NO_ACCOUNT,
+    });
   }
 
   const acc = userAccount[0];
 
   if (!acc.accessToken) {
-    throw new Error('No access token available');
+    throw new AuthenticationError({
+      message: 'No access token available. Please re-authenticate with Google.',
+      authErrorType: AUTH_ERROR_TYPES.NO_ACCESS_TOKEN,
+    });
   }
 
   if (!acc.refreshToken) {
-    throw new Error('No refresh token available. Please re-authenticate.');
+    throw new AuthenticationError({
+      message:
+        'No refresh token available. Please re-authenticate with Google.',
+      authErrorType: AUTH_ERROR_TYPES.NO_REFRESH_TOKEN,
+    });
   }
 
   // Create OAuth2 client with credentials

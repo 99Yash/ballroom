@@ -7,6 +7,7 @@ import {
 } from '@trigger.dev/sdk';
 import { z } from 'zod';
 import { categorizeUserVideos } from '~/lib/ai/categorize';
+import { AuthenticationError } from '~/lib/errors';
 import { syncLikedVideosForUser } from '~/lib/youtube';
 
 /**
@@ -42,17 +43,17 @@ export const initialSyncTask = schemaTask({
       .set('endTime', new Date().toISOString());
 
     // Abort on authentication errors - user needs to re-authenticate
-    if (
-      error instanceof Error &&
-      (error.message.includes('No access token') ||
-        error.message.includes('No refresh token') ||
-        error.message.includes('No Google account'))
-    ) {
-      metadata.set('errorType', 'auth_error').set('aborted', true);
+    if (error instanceof AuthenticationError) {
+      metadata
+        .set('errorType', 'auth_error')
+        .set('authErrorType', error.authErrorType)
+        .set('requiresReauthentication', error.requiresReauthentication())
+        .set('aborted', true);
 
       logger.error('Initial sync aborted - auth error', {
         userId: payload.userId,
         runId: ctx.run.id,
+        authErrorType: error.authErrorType,
         error: error.message,
       });
       throw new AbortTaskRunError(error.message);
@@ -159,6 +160,7 @@ export const incrementalSyncTask = schemaTask({
     minTimeoutInMs: 2000,
     maxTimeoutInMs: 15000,
     factor: 2,
+    randomize: true,
   },
   catchError: async ({ error, ctx, payload }) => {
     // Update metadata with error status
@@ -171,17 +173,17 @@ export const incrementalSyncTask = schemaTask({
       .set('endTime', new Date().toISOString());
 
     // Abort on authentication errors - user needs to re-authenticate
-    if (
-      error instanceof Error &&
-      (error.message.includes('No access token') ||
-        error.message.includes('No refresh token') ||
-        error.message.includes('No Google account'))
-    ) {
-      metadata.set('errorType', 'auth_error').set('aborted', true);
+    if (error instanceof AuthenticationError) {
+      metadata
+        .set('errorType', 'auth_error')
+        .set('authErrorType', error.authErrorType)
+        .set('requiresReauthentication', error.requiresReauthentication())
+        .set('aborted', true);
 
       logger.warn('Incremental sync aborted - auth error', {
         userId: payload.userId,
         runId: ctx.run.id,
+        authErrorType: error.authErrorType,
         error: error.message,
       });
       throw new AbortTaskRunError(error.message);

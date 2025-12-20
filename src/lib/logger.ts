@@ -81,7 +81,7 @@ class Logger {
       duration?: number;
       status?: number;
       error?: Error;
-    }
+    } & LogContext
   ) {
     const level = data.error ? 'error' : 'info';
     this.log(level, `API ${method} ${path}`, {
@@ -93,4 +93,3 @@ class Logger {
 }
 
 export const logger = new Logger();
-
