@@ -25,7 +25,6 @@ export function VideoCard({ video, className }: VideoCardProps) {
         className
       )}
     >
-      {/* Thumbnail */}
       <div className="relative aspect-video w-full overflow-hidden bg-muted">
         {video.thumbnailUrl ? (
           <Image
@@ -59,7 +58,6 @@ export function VideoCard({ video, className }: VideoCardProps) {
           </div>
         )}
 
-        {/* Play icon overlay */}
         <div className="absolute inset-0 flex items-center justify-center bg-black/0 transition-colors group-hover:bg-black/20">
           <div className="scale-0 rounded-full bg-red-600 p-3 transition-transform group-hover:scale-100">
             <svg
@@ -73,19 +71,15 @@ export function VideoCard({ video, className }: VideoCardProps) {
         </div>
       </div>
 
-      {/* Content */}
       <div className="flex flex-1 flex-col gap-2 p-4">
-        {/* Title */}
         <h3 className="line-clamp-2 text-sm font-medium leading-tight text-foreground transition-colors group-hover:text-primary">
           {video.title}
         </h3>
 
-        {/* Channel */}
         {video.channelName && (
           <p className="text-xs text-muted-foreground">{video.channelName}</p>
         )}
 
-        {/* Category badge */}
         {video.categoryName && (
           <div className="mt-auto pt-2">
             <Badge variant="secondary" className="text-xs">

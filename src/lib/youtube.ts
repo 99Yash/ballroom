@@ -52,7 +52,6 @@ async function createYouTubeClient(
     });
   }
 
-  // Create OAuth2 client with credentials
   const oauth2Client = new OAuth2Client(
     process.env.GOOGLE_CLIENT_ID!,
     process.env.GOOGLE_CLIENT_SECRET!
@@ -172,7 +171,6 @@ export async function fetchAllLikedVideos(
     allVideos.push(...fetchedVideos);
     pageToken = nextPageToken;
 
-    // If we have a limit and we've reached it, stop
     if (limit && allVideos.length >= limit) {
       return allVideos.slice(0, limit);
     }
@@ -198,14 +196,12 @@ export async function syncLikedVideosForUser(
   userId: string,
   limit?: number
 ): Promise<SyncResult> {
-  // Fetch liked videos from YouTube
   const likedVideos = await fetchAllLikedVideos(userId, limit);
 
   if (likedVideos.length === 0) {
     return { synced: 0, new: 0, existing: 0 };
   }
 
-  // Get existing videos to avoid duplicates
   const existingVideos = await db
     .select({ youtubeId: videos.youtubeId })
     .from(videos)
@@ -221,10 +217,8 @@ export async function syncLikedVideosForUser(
 
   const existingIds = new Set(existingVideos.map((v) => v.youtubeId));
 
-  // Filter to only new videos
   const newVideos = likedVideos.filter((v) => !existingIds.has(v.youtubeId));
 
-  // Insert new videos
   if (newVideos.length > 0) {
     await db.insert(videos).values(
       newVideos.map((v) => ({

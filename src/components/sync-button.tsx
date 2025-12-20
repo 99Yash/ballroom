@@ -30,7 +30,6 @@ interface SyncStatus {
   totalVideos: number;
 }
 
-// Full sync is only available in development
 const isDevelopment = process.env.NODE_ENV === 'development';
 
 export function SyncButton({
@@ -68,7 +67,6 @@ export function SyncButton({
     fetchSyncStatus();
   }, [fetchSyncStatus]);
 
-  // Measure main button width for dropdown content
   React.useEffect(() => {
     if (!isDevelopment) return;
 
@@ -108,10 +106,7 @@ export function SyncButton({
       setStatus(`Synced ${result.new} new videos`);
       onSyncComplete?.(result);
 
-      // Refresh sync status
       await fetchSyncStatus();
-
-      // Auto-categorize after sync
       await handleCategorize();
     } catch (error) {
       setStatus(error instanceof Error ? error.message : 'Sync failed');
@@ -144,7 +139,6 @@ export function SyncButton({
       });
       setStatus('Full sync running in background...');
 
-      // Clear status after a delay
       setTimeout(() => {
         setStatus(null);
         fetchSyncStatus();
@@ -177,7 +171,6 @@ export function SyncButton({
       setStatus(`Categorized ${result.categorized} videos`);
       onCategorizeComplete?.(result);
 
-      // Clear status after a delay
       setTimeout(() => setStatus(null), 3000);
     } catch (error) {
       setStatus(
@@ -197,7 +190,6 @@ export function SyncButton({
   return (
     <div className="flex flex-col items-start gap-2">
       <div className="flex items-center gap-2">
-        {/* Sync button - with dropdown in dev mode only */}
         {isDevelopment ? (
           <div className="flex">
             <Button

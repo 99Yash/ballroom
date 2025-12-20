@@ -17,13 +17,11 @@ export async function POST(request: Request) {
     const session = await requireSession();
     const body = await request.json();
 
-    // Validate request body
     const { categories: categoryNames } = validateRequestBody(
       completeOnboardingSchema,
       body
     );
 
-    // Check if user is already onboarded
     const [currentUser] = await db
       .select({ onboardedAt: user.onboardedAt })
       .from(user)
@@ -36,7 +34,6 @@ export async function POST(request: Request) {
       });
     }
 
-    // Check for existing categories (shouldn't exist for new users)
     const existingCategories = await db
       .select()
       .from(categories)
@@ -50,21 +47,17 @@ export async function POST(request: Request) {
       });
     }
 
-    // Deduplicate category names (case-insensitive)
     const uniqueNames = [
       ...new Set(categoryNames.map((n) => n.toLowerCase())),
     ].map(
       (lowerName) => categoryNames.find((n) => n.toLowerCase() === lowerName)!
     );
 
-    // Ensure "Other" is included (add if not present)
     const hasOther = uniqueNames.some((n) => n.toLowerCase() === 'other');
 
     const finalCategories = hasOther ? uniqueNames : [...uniqueNames, 'Other'];
 
-    // Create categories in a transaction along with updating onboardedAt
     await db.transaction(async (tx) => {
-      // Insert all categories
       await tx.insert(categories).values(
         finalCategories.map((name) => ({
           userId: session.user.id,
@@ -73,14 +66,12 @@ export async function POST(request: Request) {
         }))
       );
 
-      // Mark user as onboarded
       await tx
         .update(user)
         .set({ onboardedAt: new Date() })
         .where(eq(user.id, session.user.id));
     });
 
-    // Trigger initial sync task in background
     try {
       await initialSyncTask.trigger({ userId: session.user.id });
       logger.info('Triggered initial sync task', { userId: session.user.id });

@@ -17,10 +17,8 @@ export async function POST(request: Request) {
     const session = await requireSession();
     const body = await request.json().catch(() => ({}));
 
-    // Validate request body
     const { force } = validateRequestBody(categorizeVideosSchema, body);
 
-    // Check if user has categories
     const userCategories = await db
       .select()
       .from(categories)
@@ -34,7 +32,6 @@ export async function POST(request: Request) {
       });
     }
 
-    // Categorize videos using the reusable function
     const result = await categorizeUserVideos(session.user.id, force);
 
     const response = NextResponse.json({

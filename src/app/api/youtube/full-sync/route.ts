@@ -75,7 +75,6 @@ export async function POST() {
       environment: process.env.NODE_ENV,
     });
 
-    // Trigger the full sync task in the background
     const handle = await initialSyncTask.trigger({ userId });
 
     logger.api('POST', '/api/youtube/full-sync', {

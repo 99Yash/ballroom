@@ -116,7 +116,6 @@ export function CategoryManager({
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* Add new category */}
           <div className="flex gap-2">
             <Input
               placeholder="New category name..."
@@ -144,7 +143,6 @@ export function CategoryManager({
             </p>
           )}
 
-          {/* Category list */}
           <div className="max-h-[300px] space-y-2 overflow-y-auto">
             {categories.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-4">

@@ -37,14 +37,16 @@ export function DashboardClient({
 }: DashboardClientProps) {
   const router = useRouter();
   const [videos, setVideos] = React.useState<SerializedVideo[]>([]);
-  const [categories, setCategories] = React.useState<Category[]>(initialCategories);
-  const [selectedCategory, setSelectedCategory] = React.useState<string | null>(null);
+  const [categories, setCategories] =
+    React.useState<Category[]>(initialCategories);
+  const [selectedCategory, setSelectedCategory] = React.useState<string | null>(
+    null
+  );
   const [currentPage, setCurrentPage] = React.useState(1);
   const [totalPages, setTotalPages] = React.useState(0);
   const [isLoading, setIsLoading] = React.useState(true);
-  const limit = 24; // Videos per page
+  const limit = 24;
 
-  // Fetch videos from API
   const fetchVideos = React.useCallback(async () => {
     setIsLoading(true);
     try {
@@ -75,17 +77,14 @@ export function DashboardClient({
     }
   }, [currentPage, selectedCategory, limit]);
 
-  // Fetch videos when page or category changes
   React.useEffect(() => {
     fetchVideos();
   }, [fetchVideos]);
 
-  // Get category counts (we'll fetch these separately)
-  const [categoryCounts, setCategoryCounts] = React.useState<Record<string, number>>(
-    {}
-  );
+  const [categoryCounts, setCategoryCounts] = React.useState<
+    Record<string, number>
+  >({});
 
-  // Fetch category counts in a single API call
   const fetchCategoryCounts = React.useCallback(async () => {
     try {
       const response = await fetch('/api/youtube/videos/counts');
@@ -116,7 +115,6 @@ export function DashboardClient({
     router.refresh();
   };
 
-  // Reset to page 1 when category changes
   const handleCategoryChange = (categoryId: string | null) => {
     setSelectedCategory(categoryId);
     setCurrentPage(1);
@@ -134,11 +132,9 @@ export function DashboardClient({
 
   const handleCategoryDeleted = (categoryId: string) => {
     setCategories((prev) => prev.filter((c) => c.id !== categoryId));
-    // If viewing the deleted category, switch to "All"
     if (selectedCategory === categoryId) {
       handleCategoryChange(null);
     } else {
-      // Just refresh the current view
       fetchVideos();
       fetchCategoryCounts();
     }
@@ -146,7 +142,6 @@ export function DashboardClient({
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
       <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container mx-auto flex h-16 items-center justify-between px-4">
           <div className="flex items-center gap-3">
@@ -169,7 +164,6 @@ export function DashboardClient({
       </header>
 
       <main className="container mx-auto px-4 py-8">
-        {/* Actions bar */}
         <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <SyncButton
             onSyncComplete={handleRefresh}
@@ -183,7 +177,6 @@ export function DashboardClient({
           />
         </div>
 
-        {/* Category filters */}
         <div className="mb-6 flex flex-wrap gap-2">
           <Button
             variant={selectedCategory === null ? 'default' : 'outline'}
@@ -224,7 +217,6 @@ export function DashboardClient({
           )}
         </div>
 
-        {/* Loading state */}
         {isLoading ? (
           <div className="flex flex-col items-center justify-center py-20 text-center">
             <div className="mb-4 h-8 w-8 animate-spin rounded-full border-4 border-muted border-t-primary" />
@@ -232,14 +224,12 @@ export function DashboardClient({
           </div>
         ) : videos.length > 0 ? (
           <>
-            {/* Videos grid */}
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {videos.map((video) => (
                 <VideoCard key={video.id} video={video} />
               ))}
             </div>
 
-            {/* Pagination */}
             {totalPages > 1 && (
               <div className="mt-8 flex items-center justify-center">
                 <Pagination>
@@ -259,14 +249,12 @@ export function DashboardClient({
 
                     {Array.from({ length: totalPages }, (_, i) => i + 1).map(
                       (page) => {
-                        // Show first page, last page, current page, and pages around current
                         const showPage =
                           page === 1 ||
                           page === totalPages ||
                           (page >= currentPage - 1 && page <= currentPage + 1);
 
                         if (!showPage) {
-                          // Show ellipsis for skipped pages
                           if (
                             page === currentPage - 2 ||
                             page === currentPage + 2
