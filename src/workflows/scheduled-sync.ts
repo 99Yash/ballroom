@@ -34,8 +34,6 @@ export const hourlySyncSchedule = schedules.task({
       error: error instanceof Error ? error.message : String(error),
       scheduledAt: payload.timestamp,
     });
-
-    // Allow retry for all errors - this is a scheduled job
   },
   run: async (payload) => {
     logger.info('Starting hourly sync for all users', {
@@ -43,27 +41,23 @@ export const hourlySyncSchedule = schedules.task({
       lastTimestamp: payload.lastTimestamp,
     });
 
-    // Add tags for filtering and monitoring
     const scheduleDate = new Date(payload.timestamp);
     await tags.add('scheduled-sync');
     await tags.add(`date:${scheduleDate.toISOString().split('T')[0]}`); // YYYY-MM-DD
-    await tags.add(`hour:${scheduleDate.getUTCHours()}`); // 0-23
+    await tags.add(`hour:${scheduleDate.getUTCHours()}`);
 
-    // Initialize progress tracking
     metadata
       .set('status', 'fetching_users')
       .set('usersProcessed', 0)
       .set('totalBatches', 0)
       .set('startTime', new Date().toISOString());
 
-    // Process users in chunks to avoid memory issues
     let offset = 0;
     let totalUsersProcessed = 0;
     let batchCount = 0;
     const batchIds: string[] = [];
 
     while (true) {
-      // Fetch next batch of users
       const userBatch = await db
         .select({ id: user.id })
         .from(user)
@@ -71,7 +65,6 @@ export const hourlySyncSchedule = schedules.task({
         .limit(USER_BATCH_SIZE)
         .offset(offset);
 
-      // Exit if no more users
       if (userBatch.length === 0) {
         logger.info('No more users to process', {
           offset,
@@ -87,18 +80,14 @@ export const hourlySyncSchedule = schedules.task({
         totalSoFar: totalUsersProcessed + userBatch.length,
       });
 
-      // Trigger sync tasks for this batch
-      // Concurrency is controlled by the queue on incrementalSyncTask
       const batchHandle = await incrementalSyncTask.batchTrigger(
         userBatch.map((u) => ({ payload: { userId: u.id } }))
       );
 
-      // Track progress
       totalUsersProcessed += userBatch.length;
       batchCount++;
       batchIds.push(batchHandle.batchId);
 
-      // Update metadata for real-time monitoring
       metadata
         .set('status', 'processing_batches')
         .set('usersProcessed', totalUsersProcessed)
@@ -113,10 +102,8 @@ export const hourlySyncSchedule = schedules.task({
         totalProcessed: totalUsersProcessed,
       });
 
-      // Move to next batch
       offset += USER_BATCH_SIZE;
 
-      // If batch returned fewer users than limit, we've reached the end
       if (userBatch.length < USER_BATCH_SIZE) {
         logger.info('Reached end of users', {
           lastBatchSize: userBatch.length,
@@ -126,7 +113,6 @@ export const hourlySyncSchedule = schedules.task({
       }
     }
 
-    // Final status
     metadata
       .set('status', 'completed')
       .set('endTime', new Date().toISOString());

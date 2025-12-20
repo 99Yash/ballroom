@@ -1,7 +1,7 @@
 'use client';
 
 import { Plus, Settings2, Trash2 } from 'lucide-react';
-import { useState } from 'react';
+import * as React from 'react';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import {
@@ -35,11 +35,11 @@ export function CategoryManager({
   onCategoryDeleted,
   onCategoriesChanged,
 }: CategoryManagerProps) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [newCategoryName, setNewCategoryName] = useState('');
-  const [isAdding, setIsAdding] = useState(false);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [isOpen, setIsOpen] = React.useState(false);
+  const [newCategoryName, setNewCategoryName] = React.useState('');
+  const [isAdding, setIsAdding] = React.useState(false);
+  const [deletingId, setDeletingId] = React.useState<string | null>(null);
+  const [error, setError] = React.useState<string | null>(null);
 
   const handleAddCategory = async () => {
     if (!newCategoryName.trim()) return;
@@ -116,7 +116,6 @@ export function CategoryManager({
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* Add new category */}
           <div className="flex gap-2">
             <Input
               placeholder="New category name..."
@@ -144,7 +143,6 @@ export function CategoryManager({
             </p>
           )}
 
-          {/* Category list */}
           <div className="max-h-[300px] space-y-2 overflow-y-auto">
             {categories.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-4">

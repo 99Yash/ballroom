@@ -11,10 +11,8 @@ export async function POST(request: Request) {
     const session = await requireSession();
     const body = await request.json().catch(() => ({}));
 
-    // Validate request body
     const { limit } = validateRequestBody(syncVideosSchema, body);
 
-    // Sync videos using the reusable function
     const result = await syncLikedVideosForUser(session.user.id, limit);
 
     const response = NextResponse.json({

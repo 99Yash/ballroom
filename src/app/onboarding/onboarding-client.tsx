@@ -2,7 +2,7 @@
 
 import { Plus, Sparkles, Trash2, Youtube } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import * as React from 'react';
 import { toast } from 'sonner';
 import { Button } from '~/components/ui/button';
 import { Input } from '~/components/ui/input';
@@ -27,9 +27,9 @@ const SUGGESTED_CATEGORIES = [
 
 export function OnboardingClient({ userName }: OnboardingClientProps) {
   const router = useRouter();
-  const [categories, setCategories] = useState<string[]>([]);
-  const [inputValue, setInputValue] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [categories, setCategories] = React.useState<string[]>([]);
+  const [inputValue, setInputValue] = React.useState('');
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
 
   const addCategory = (name: string) => {
     const trimmed = name.trim();

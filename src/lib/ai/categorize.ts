@@ -266,21 +266,34 @@ export async function categorizeUserVideos(
     return { categorized: 0, total: 0, skipped: 0 };
   }
 
-  // Get the most recent category update time
-  const latestCategoryUpdate = userCategories.reduce((latest, cat) => {
-    const catTime = cat.updatedAt?.getTime() || cat.createdAt.getTime();
-    return catTime > latest ? catTime : latest;
-  }, 0);
+  // Get the latest category update timestamp
+  // This is used to determine if videos need re-categorization after category changes
+  const latestCategoryUpdate = userCategories.reduce((latest, category) => {
+    const updatedAt = category.updatedAt;
+    if (!updatedAt) return latest;
+    return updatedAt > latest ? updatedAt : latest;
+  }, new Date(0));
 
   // Get videos that need categorization
+  // Only analyze videos that don't have a category assigned (unless force=true)
+  // Also re-analyze videos that were analyzed before the latest category update
   let videosToAnalyze: DatabaseVideo[] = [];
 
   if (force) {
+    // Force mode: re-analyze ALL videos (use with caution)
     videosToAnalyze = await db
       .select()
       .from(videos)
       .where(eq(videos.userId, userId));
+
+    logger.info('Force re-categorization requested', {
+      userId,
+      totalVideos: videosToAnalyze.length,
+    });
   } else {
+    // Normal mode: analyze videos that either:
+    // 1. Don't have a category assigned, OR
+    // 2. Were last analyzed before the most recent category update
     videosToAnalyze = await db
       .select()
       .from(videos)
@@ -290,7 +303,7 @@ export async function categorizeUserVideos(
           or(
             isNull(videos.categoryId),
             isNull(videos.lastAnalyzedAt),
-            lt(videos.lastAnalyzedAt, new Date(latestCategoryUpdate))
+            lt(videos.lastAnalyzedAt, latestCategoryUpdate)
           )
         )
       );

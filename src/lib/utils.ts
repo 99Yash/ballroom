@@ -46,22 +46,18 @@ export type Serialize<T> = T extends Date
  * // Type: { id: string; publishedAt: string; title: string }
  */
 export function serialize<T>(value: T): Serialize<T> {
-  // Handle null/undefined
   if (value === null || value === undefined) {
     return value as Serialize<T>;
   }
 
-  // Handle Date
   if (value instanceof Date) {
     return value.toISOString() as Serialize<T>;
   }
 
-  // Handle Arrays
   if (Array.isArray(value)) {
     return value.map((item) => serialize(item)) as Serialize<T>;
   }
 
-  // Handle Objects (but not special types like RegExp, Map, etc.)
   if (typeof value === 'object') {
     const result: Record<string, unknown> = {};
     for (const key in value) {
@@ -72,7 +68,6 @@ export function serialize<T>(value: T): Serialize<T> {
     return result as Serialize<T>;
   }
 
-  // Primitives pass through unchanged
   return value as Serialize<T>;
 }
 

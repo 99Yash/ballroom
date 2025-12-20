@@ -49,13 +49,11 @@ export async function POST(request: Request) {
     const session = await requireSession();
     const body = await request.json();
 
-    // Validate request body
     const { name: trimmedName, skipValidation } = validateRequestBody(
       createCategorySchema,
       body
     );
 
-    // Check for duplicates
     const existing = await db
       .select()
       .from(categories)

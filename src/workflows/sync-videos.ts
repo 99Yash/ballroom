@@ -33,7 +33,6 @@ export const initialSyncTask = schemaTask({
     randomize: true,
   },
   catchError: async ({ error, ctx, payload }) => {
-    // Update metadata with error status
     metadata
       .set('status', 'failed')
       .set(
@@ -42,7 +41,6 @@ export const initialSyncTask = schemaTask({
       )
       .set('endTime', new Date().toISOString());
 
-    // Abort on authentication errors - user needs to re-authenticate
     if (error instanceof AuthenticationError) {
       metadata
         .set('errorType', 'auth_error')
@@ -66,24 +64,19 @@ export const initialSyncTask = schemaTask({
       runId: ctx.run.id,
       error: error instanceof Error ? error.message : String(error),
     });
-
-    // Allow retry for other errors
   },
   run: async ({ userId }) => {
     logger.info('Starting initial sync for user', { userId });
 
-    // Add tags for filtering and monitoring
     await tags.add(`user:${userId}`);
     await tags.add('sync-type:initial');
 
-    // Initialize progress tracking
     metadata
       .set('status', 'starting')
       .set('userId', userId)
       .set('phase', 'sync')
       .set('startTime', new Date().toISOString());
 
-    // Step 1: Sync all liked videos from YouTube
     metadata.set('status', 'syncing');
 
     const syncResult = await syncLikedVideosForUser(userId);
@@ -94,13 +87,11 @@ export const initialSyncTask = schemaTask({
       new: syncResult.new,
     });
 
-    // Update metadata with sync results
     metadata
       .set('syncCompleted', true)
       .set('videosSynced', syncResult.synced)
       .set('newVideos', syncResult.new);
 
-    // Step 2: Categorize all videos
     if (syncResult.new > 0) {
       metadata
         .set('status', 'categorizing')
@@ -115,7 +106,6 @@ export const initialSyncTask = schemaTask({
         total: categorizeResult.total,
       });
 
-      // Update metadata with categorization results
       metadata
         .set('status', 'completed')
         .set('categorizeCompleted', true)
@@ -130,7 +120,6 @@ export const initialSyncTask = schemaTask({
       };
     }
 
-    // No new videos to categorize
     metadata
       .set('status', 'completed')
       .set('categorizeCompleted', false)
@@ -163,7 +152,6 @@ export const incrementalSyncTask = schemaTask({
     randomize: true,
   },
   catchError: async ({ error, ctx, payload }) => {
-    // Update metadata with error status
     metadata
       .set('status', 'failed')
       .set(
@@ -172,7 +160,6 @@ export const incrementalSyncTask = schemaTask({
       )
       .set('endTime', new Date().toISOString());
 
-    // Abort on authentication errors - user needs to re-authenticate
     if (error instanceof AuthenticationError) {
       metadata
         .set('errorType', 'auth_error')
@@ -196,17 +183,13 @@ export const incrementalSyncTask = schemaTask({
       runId: ctx.run.id,
       error: error instanceof Error ? error.message : String(error),
     });
-
-    // Allow retry for other errors
   },
   run: async ({ userId }) => {
     logger.info('Starting incremental sync for user', { userId });
 
-    // Add tags for filtering and monitoring
     await tags.add(`user:${userId}`);
     await tags.add('sync-type:incremental');
 
-    // Initialize progress tracking
     metadata
       .set('status', 'starting')
       .set('userId', userId)
@@ -214,7 +197,6 @@ export const incrementalSyncTask = schemaTask({
       .set('syncType', 'incremental')
       .set('startTime', new Date().toISOString());
 
-    // Fetch only recent videos (last 50)
     metadata.set('status', 'syncing').set('limit', 50);
 
     const syncResult = await syncLikedVideosForUser(userId, 50);
@@ -225,13 +207,11 @@ export const incrementalSyncTask = schemaTask({
       new: syncResult.new,
     });
 
-    // Update metadata with sync results
     metadata
       .set('syncCompleted', true)
       .set('videosSynced', syncResult.synced)
       .set('newVideos', syncResult.new);
 
-    // Only categorize if we found new videos
     if (syncResult.new > 0) {
       metadata
         .set('status', 'categorizing')
@@ -245,7 +225,6 @@ export const incrementalSyncTask = schemaTask({
         categorized: categorizeResult.categorized,
       });
 
-      // Update metadata with categorization results
       metadata
         .set('status', 'completed')
         .set('categorizeCompleted', true)
@@ -260,7 +239,6 @@ export const incrementalSyncTask = schemaTask({
       };
     }
 
-    // No new videos to categorize
     metadata
       .set('status', 'completed')
       .set('categorizeCompleted', false)
