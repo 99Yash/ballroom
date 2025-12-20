@@ -109,6 +109,11 @@ export function DashboardClient({
     fetchCategoryCounts();
   }, [fetchCategoryCounts]);
 
+  const pageNumbers = React.useMemo(
+    () => Array.from({ length: totalPages }, (_, i) => i + 1),
+    [totalPages]
+  );
+
   const handleRefresh = () => {
     fetchVideos();
     fetchCategoryCounts();
@@ -247,40 +252,38 @@ export function DashboardClient({
                       />
                     </PaginationItem>
 
-                    {Array.from({ length: totalPages }, (_, i) => i + 1).map(
-                      (page) => {
-                        const showPage =
-                          page === 1 ||
-                          page === totalPages ||
-                          (page >= currentPage - 1 && page <= currentPage + 1);
+                    {pageNumbers.map((page) => {
+                      const showPage =
+                        page === 1 ||
+                        page === totalPages ||
+                        (page >= currentPage - 1 && page <= currentPage + 1);
 
-                        if (!showPage) {
-                          if (
-                            page === currentPage - 2 ||
-                            page === currentPage + 2
-                          ) {
-                            return (
-                              <PaginationItem key={page}>
-                                <span className="px-2">...</span>
-                              </PaginationItem>
-                            );
-                          }
-                          return null;
+                      if (!showPage) {
+                        if (
+                          page === currentPage - 2 ||
+                          page === currentPage + 2
+                        ) {
+                          return (
+                            <PaginationItem key={page}>
+                              <span className="px-2">...</span>
+                            </PaginationItem>
+                          );
                         }
-
-                        return (
-                          <PaginationItem key={page}>
-                            <PaginationLink
-                              onClick={() => setCurrentPage(page)}
-                              isActive={currentPage === page}
-                              className="cursor-pointer"
-                            >
-                              {page}
-                            </PaginationLink>
-                          </PaginationItem>
-                        );
+                        return null;
                       }
-                    )}
+
+                      return (
+                        <PaginationItem key={page}>
+                          <PaginationLink
+                            onClick={() => setCurrentPage(page)}
+                            isActive={currentPage === page}
+                            className="cursor-pointer"
+                          >
+                            {page}
+                          </PaginationLink>
+                        </PaginationItem>
+                      );
+                    })}
 
                     <PaginationItem>
                       <PaginationNext

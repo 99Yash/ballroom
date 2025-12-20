@@ -4,6 +4,7 @@ import { OAuth2Client } from 'google-auth-library';
 import { db } from '~/db';
 import { account, videos } from '~/db/schemas';
 import { AUTH_ERROR_TYPES, AuthenticationError } from '~/lib/errors';
+import { env } from '~/lib/env';
 import { logger } from '~/lib/logger';
 
 export interface YouTubeVideo {
@@ -53,8 +54,8 @@ async function createYouTubeClient(
   }
 
   const oauth2Client = new OAuth2Client(
-    process.env.GOOGLE_CLIENT_ID!,
-    process.env.GOOGLE_CLIENT_SECRET!
+    env.GOOGLE_CLIENT_ID,
+    env.GOOGLE_CLIENT_SECRET
   );
 
   oauth2Client.setCredentials({
