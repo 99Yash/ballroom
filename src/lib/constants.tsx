@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import * as z from 'zod/v4';
 import { Google } from '~/components/ui/icons';
 
 export const authOptionsSchema = z.enum(['GOOGLE']);

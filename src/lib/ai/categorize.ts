@@ -1,7 +1,7 @@
 import { google } from '@ai-sdk/google';
 import { generateObject } from 'ai';
 import { and, eq, inArray, isNull, lt, or } from 'drizzle-orm';
-import { z } from 'zod';
+import * as z from 'zod/v4';
 import { db } from '~/db';
 import { categories, DatabaseVideo, videos } from '~/db/schemas';
 import { logger } from '~/lib/logger';

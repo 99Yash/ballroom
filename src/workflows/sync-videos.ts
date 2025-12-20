@@ -5,7 +5,7 @@ import {
   schemaTask,
   tags,
 } from '@trigger.dev/sdk';
-import { z } from 'zod';
+import * as z from 'zod/v4';
 import { categorizeUserVideos } from '~/lib/ai/categorize';
 import { AuthenticationError } from '~/lib/errors';
 import { syncLikedVideosForUser } from '~/lib/youtube';

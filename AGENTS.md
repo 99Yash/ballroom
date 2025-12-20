@@ -310,6 +310,8 @@ Required env vars (validated at startup via `~/lib/env.ts`):
 - Use `AppError` for typed error responses
 - Run `pnpm lint` before committing
 - Use path aliases (`~/`) for imports
+- Prefer: import \* as z from "zod" (or import \* as z from "zod/v4" in your codebase)
+- Avoid (can crash): import { z } from "zod" (or import { z } from "zod/v4")
 
 ### ⚠️ Ask first
 
