@@ -19,17 +19,48 @@ const isDevelopment = process.env.NODE_ENV === 'development';
 // In-memory rate limiting (per user, resets on server restart)
 const RATE_LIMIT_WINDOW_MS = 5 * 60 * 1000; // 5 minutes
 const rateLimitMap = new Map<string, number>();
+// Map to track pending rate limit checks per user (prevents race conditions)
+const rateLimitLocks = new Map<string, Promise<void>>();
 
-function isRateLimited(userId: string): boolean {
-  const lastRequest = rateLimitMap.get(userId);
-  const now = Date.now();
-
-  if (lastRequest && now - lastRequest < RATE_LIMIT_WINDOW_MS) {
-    return true;
+/**
+ * Atomically check and update rate limit for a user.
+ * Uses a per-user lock to prevent concurrent requests from bypassing rate limits.
+ */
+async function checkRateLimit(userId: string): Promise<boolean> {
+  // Wait for any pending rate limit check for this user
+  const existingLock = rateLimitLocks.get(userId);
+  if (existingLock) {
+    await existingLock;
   }
 
-  rateLimitMap.set(userId, now);
-  return false;
+  // Create a new lock for this check
+  let resolveLock: () => void;
+  const lock = new Promise<void>((resolve) => {
+    resolveLock = resolve;
+  });
+  rateLimitLocks.set(userId, lock);
+
+  try {
+    const lastRequest = rateLimitMap.get(userId);
+    const now = Date.now();
+
+    if (lastRequest && now - lastRequest < RATE_LIMIT_WINDOW_MS) {
+      return true; // Rate limited
+    }
+
+    // Atomically update the timestamp
+    rateLimitMap.set(userId, now);
+    return false; // Not rate limited
+  } finally {
+    // Release the lock
+    resolveLock!();
+    // Clean up the lock after a short delay to allow any waiting requests to proceed
+    setTimeout(() => {
+      if (rateLimitLocks.get(userId) === lock) {
+        rateLimitLocks.delete(userId);
+      }
+    }, 100);
+  }
 }
 
 function getRemainingCooldown(userId: string): number {
@@ -58,7 +89,9 @@ export async function POST() {
     const userId = session.user.id;
 
     // STRICT: Rate limiting - max 1 request per 5 minutes per user
-    if (isRateLimited(userId)) {
+    // Uses atomic check-and-update to prevent race conditions
+    const isLimited = await checkRateLimit(userId);
+    if (isLimited) {
       const remainingSeconds = getRemainingCooldown(userId);
       logger.warn('Full sync rate limited', {
         userId,

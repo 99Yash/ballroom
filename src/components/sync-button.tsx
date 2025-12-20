@@ -40,16 +40,6 @@ export function SyncButton({
   const [isCategorizing, setIsCategorizing] = React.useState(false);
   const [status, setStatus] = React.useState<string | null>(null);
   const [syncStatus, setSyncStatus] = React.useState<SyncStatus | null>(null);
-  const mainButtonRef = React.useRef<HTMLButtonElement>(null);
-  const [dropdownWidth, setDropdownWidth] = React.useState<
-    number | undefined
-  >();
-
-  const measureButtonWidth = React.useCallback(() => {
-    if (mainButtonRef.current) {
-      setDropdownWidth(mainButtonRef.current.offsetWidth);
-    }
-  }, []);
 
   const fetchSyncStatus = React.useCallback(async () => {
     try {
@@ -66,25 +56,6 @@ export function SyncButton({
   React.useEffect(() => {
     fetchSyncStatus();
   }, [fetchSyncStatus]);
-
-  React.useEffect(() => {
-    if (!isDevelopment) return;
-
-    // Use requestAnimationFrame to ensure button is rendered
-    const rafId = requestAnimationFrame(() => {
-      measureButtonWidth();
-    });
-
-    const handleResize = () => {
-      measureButtonWidth();
-    };
-
-    window.addEventListener('resize', handleResize);
-    return () => {
-      cancelAnimationFrame(rafId);
-      window.removeEventListener('resize', handleResize);
-    };
-  }, [measureButtonWidth]);
 
   const handleSync = async (limit: number) => {
     setIsSyncing(true);
@@ -193,7 +164,6 @@ export function SyncButton({
         {isDevelopment ? (
           <div className="flex">
             <Button
-              ref={mainButtonRef}
               onClick={handleQuickSync}
               disabled={isLoading}
               className="gap-2 rounded-r-none"
@@ -214,12 +184,7 @@ export function SyncButton({
                   <ChevronDown className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent
-                align="end"
-                style={
-                  dropdownWidth ? { width: `${dropdownWidth}px` } : undefined
-                }
-              >
+              <DropdownMenuContent align="end">
                 <DropdownMenuItem
                   onClick={handleQuickSync}
                   disabled={isLoading}
