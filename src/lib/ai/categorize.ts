@@ -1,4 +1,4 @@
-import { openai } from '@ai-sdk/openai';
+import { google } from '@ai-sdk/google';
 import { generateObject } from 'ai';
 import { and, eq, inArray, isNull, lt, or } from 'drizzle-orm';
 import { z } from 'zod';
@@ -111,7 +111,7 @@ export async function validateCategoryName(name: string): Promise<{
   const result = await retryWithBackoff(
     () =>
       generateObject({
-        model: openai('gpt-4o-mini'),
+        model: google('gemini-2.5-flash-lite'),
         schema: z.object({
           valid: z
             .boolean()
@@ -174,7 +174,7 @@ export async function categorizeVideos(
   const result = await retryWithBackoff(
     () =>
       generateObject({
-        model: openai('gpt-4o-mini'),
+        model: google('gemini-2.5-flash-lite'),
         schema: z.object({
           categorizations: z.array(
             z.object({

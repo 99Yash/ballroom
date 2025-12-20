@@ -15,7 +15,7 @@ try {
     'DATABASE_URL',
     'GOOGLE_CLIENT_ID',
     'GOOGLE_CLIENT_SECRET',
-    'OPENAI_API_KEY',
+    'GOOGLE_GENERATIVE_AI_API_KEY',
     'BETTER_AUTH_SECRET',
   ] as const;
 
@@ -39,9 +39,7 @@ try {
   if (env.DATABASE_URL.startsWith('postgres')) {
     console.log('  ✓ DATABASE_URL appears to be a valid PostgreSQL URL');
   } else {
-    console.warn(
-      '  ⚠ DATABASE_URL does not appear to be a PostgreSQL URL'
-    );
+    console.warn('  ⚠ DATABASE_URL does not appear to be a PostgreSQL URL');
   }
 
   // Check Node environment
@@ -59,4 +57,3 @@ try {
   );
   process.exit(1);
 }
-

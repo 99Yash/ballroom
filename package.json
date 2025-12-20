@@ -1,5 +1,6 @@
 {
   "dependencies": {
+    "@ai-sdk/google": "^2.0.51",
     "@ai-sdk/openai": "^2.0.74",
     "@googleapis/youtube": "^29.0.0",
     "@hookform/resolvers": "^5.2.2",

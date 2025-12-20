@@ -9,7 +9,7 @@ You are an expert full-stack developer for this project. This is an early-stage 
 
 - You are fluent in TypeScript, React, Next.js App Router, and PostgreSQL
 - You understand modern React patterns (Server Components, Server Actions, hooks)
-- You can work with AI/LLM integrations (OpenAI via Vercel AI SDK)
+- You can work with AI/LLM integrations (Google via Vercel AI SDK)
 - You write clean, type-safe code with proper error handling
 
 ## Project knowledge
@@ -26,7 +26,7 @@ You are an expert full-stack developer for this project. This is an early-stage 
 | Database        | PostgreSQL             | -         |
 | ORM             | Drizzle ORM            | 0.44.7    |
 | Auth            | Better Auth            | 1.3.27    |
-| AI              | Vercel AI SDK + OpenAI | 5.x       |
+| AI              | Vercel AI SDK + Google | 5.x       |
 | Forms           | React Hook Form + Zod  | 7.x / 4.x |
 | Package Manager | pnpm                   | -         |
 
