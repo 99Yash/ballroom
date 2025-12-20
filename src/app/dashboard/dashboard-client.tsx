@@ -2,7 +2,7 @@
 
 import { FolderOpen, LogOut, Youtube } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useState } from 'react';
+import * as React from 'react';
 import { toast } from 'sonner';
 import { CategoryManager } from '~/components/category-manager';
 import { SyncButton } from '~/components/sync-button';
@@ -36,16 +36,16 @@ export function DashboardClient({
   userName,
 }: DashboardClientProps) {
   const router = useRouter();
-  const [videos, setVideos] = useState<SerializedVideo[]>([]);
-  const [categories, setCategories] = useState<Category[]>(initialCategories);
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(0);
-  const [isLoading, setIsLoading] = useState(true);
+  const [videos, setVideos] = React.useState<SerializedVideo[]>([]);
+  const [categories, setCategories] = React.useState<Category[]>(initialCategories);
+  const [selectedCategory, setSelectedCategory] = React.useState<string | null>(null);
+  const [currentPage, setCurrentPage] = React.useState(1);
+  const [totalPages, setTotalPages] = React.useState(0);
+  const [isLoading, setIsLoading] = React.useState(true);
   const limit = 24; // Videos per page
 
   // Fetch videos from API
-  const fetchVideos = useCallback(async () => {
+  const fetchVideos = React.useCallback(async () => {
     setIsLoading(true);
     try {
       const params = new URLSearchParams({
@@ -76,17 +76,17 @@ export function DashboardClient({
   }, [currentPage, selectedCategory, limit]);
 
   // Fetch videos when page or category changes
-  useEffect(() => {
+  React.useEffect(() => {
     fetchVideos();
   }, [fetchVideos]);
 
   // Get category counts (we'll fetch these separately)
-  const [categoryCounts, setCategoryCounts] = useState<Record<string, number>>(
+  const [categoryCounts, setCategoryCounts] = React.useState<Record<string, number>>(
     {}
   );
 
   // Fetch category counts in a single API call
-  const fetchCategoryCounts = useCallback(async () => {
+  const fetchCategoryCounts = React.useCallback(async () => {
     try {
       const response = await fetch('/api/youtube/videos/counts');
       if (!response.ok) {
@@ -106,7 +106,7 @@ export function DashboardClient({
     }
   }, []);
 
-  useEffect(() => {
+  React.useEffect(() => {
     fetchCategoryCounts();
   }, [fetchCategoryCounts]);
 

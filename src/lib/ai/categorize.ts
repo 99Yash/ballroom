@@ -1,6 +1,6 @@
 import { google } from '@ai-sdk/google';
 import { generateObject } from 'ai';
-import { and, eq, inArray, isNull, lt, or } from 'drizzle-orm';
+import { and, eq, inArray, isNull } from 'drizzle-orm';
 import * as z from 'zod/v4';
 import { db } from '~/db';
 import { categories, DatabaseVideo, videos } from '~/db/schemas';
@@ -266,34 +266,27 @@ export async function categorizeUserVideos(
     return { categorized: 0, total: 0, skipped: 0 };
   }
 
-  // Get the most recent category update time
-  const latestCategoryUpdate = userCategories.reduce((latest, cat) => {
-    const catTime = cat.updatedAt?.getTime() || cat.createdAt.getTime();
-    return catTime > latest ? catTime : latest;
-  }, 0);
-
   // Get videos that need categorization
+  // Only analyze videos that don't have a category assigned (unless force=true)
   let videosToAnalyze: DatabaseVideo[] = [];
 
   if (force) {
+    // Force mode: re-analyze ALL videos (use with caution)
     videosToAnalyze = await db
       .select()
       .from(videos)
       .where(eq(videos.userId, userId));
+
+    logger.info('Force re-categorization requested', {
+      userId,
+      totalVideos: videosToAnalyze.length,
+    });
   } else {
+    // Normal mode: only analyze videos without a category
     videosToAnalyze = await db
       .select()
       .from(videos)
-      .where(
-        and(
-          eq(videos.userId, userId),
-          or(
-            isNull(videos.categoryId),
-            isNull(videos.lastAnalyzedAt),
-            lt(videos.lastAnalyzedAt, new Date(latestCategoryUpdate))
-          )
-        )
-      );
+      .where(and(eq(videos.userId, userId), isNull(videos.categoryId)));
   }
 
   if (videosToAnalyze.length === 0) {
