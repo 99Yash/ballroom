@@ -73,9 +73,9 @@ export function SyncButton({
     if (!isDevelopment) return;
 
     // Use requestAnimationFrame to ensure button is rendered
-    const timeoutId = setTimeout(() => {
+    const rafId = requestAnimationFrame(() => {
       measureButtonWidth();
-    }, 0);
+    });
 
     const handleResize = () => {
       measureButtonWidth();
@@ -83,7 +83,7 @@ export function SyncButton({
 
     window.addEventListener('resize', handleResize);
     return () => {
-      clearTimeout(timeoutId);
+      cancelAnimationFrame(rafId);
       window.removeEventListener('resize', handleResize);
     };
   }, [measureButtonWidth]);
