@@ -1,4 +1,5 @@
 import type { NextConfig } from 'next';
+import './src/lib/env'; // Validate environment variables at build time
 
 const nextConfig: NextConfig = {
   images: {

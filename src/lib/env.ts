@@ -1,69 +1,37 @@
+import { createEnv } from '@t3-oss/env-nextjs';
 import * as z from 'zod/v4';
-import { logger } from './logger';
 
 /**
- * Environment variable schema
- * Validates required env vars are present at runtime
+ * Environment variable schema using T3 Env
+ * Validates required env vars are present at runtime and build time
  */
-const envSchema = z.object({
-  // Database
-  DATABASE_URL: z.string().url().min(1, 'DATABASE_URL is required'),
+export const env = createEnv({
+  server: {
+    // Database
+    DATABASE_URL: z.string().url(),
 
-  // Google OAuth & YouTube API
-  GOOGLE_CLIENT_ID: z.string().min(1, 'GOOGLE_CLIENT_ID is required'),
-  GOOGLE_CLIENT_SECRET: z.string().min(1, 'GOOGLE_CLIENT_SECRET is required'),
+    // Google OAuth & YouTube API
+    GOOGLE_CLIENT_ID: z.string().min(1),
+    GOOGLE_CLIENT_SECRET: z.string().min(1),
 
-  // Google Generative AI API
-  GOOGLE_GENERATIVE_AI_API_KEY: z
-    .string()
-    .min(1, 'GOOGLE_GENERATIVE_AI_API_KEY is required'),
+    // Google Generative AI API
+    GOOGLE_GENERATIVE_AI_API_KEY: z.string().min(1),
 
-  // Better Auth
-  BETTER_AUTH_SECRET: z.string().min(1, 'BETTER_AUTH_SECRET is required'),
-  BETTER_AUTH_URL: z
-    .string()
-    .url()
-    .min(1, 'BETTER_AUTH_URL is required')
-    .optional(),
+    // Better Auth
+    BETTER_AUTH_SECRET: z.string().min(1),
 
-  // Trigger.dev
-  TRIGGER_SECRET_KEY: z.string().min(1, 'TRIGGER_SECRET_KEY is required'),
+    // Trigger.dev
+    TRIGGER_SECRET_KEY: z.string().min(1),
 
-  // Node Environment
-  NODE_ENV: z
-    .enum(['development', 'production', 'test'])
-    .default('development'),
+    // Node Environment
+    NODE_ENV: z
+      .enum(['development', 'production', 'test'])
+      .default('development'),
+  },
+  client: {
+    // Better Auth base URL (optional - Better Auth auto-detects if not provided)
+    NEXT_PUBLIC_BETTER_AUTH_URL: z.string().url().optional(),
+  },
+  // For Next.js 16+, we can use experimental__runtimeEnv for automatic handling
+  experimental__runtimeEnv: process.env,
 });
-
-/**
- * Parsed and validated environment variables
- * Call this once at app startup to ensure all required vars are present
- */
-function validateEnv() {
-  try {
-    return envSchema.parse(process.env);
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      const missingVars = error.issues
-        .map((err) => `  - ${err.path.join('.')}: ${err.message}`)
-        .join('\n');
-
-      logger.error('Environment variable validation failed', error, {
-        missingVars,
-      });
-      throw new Error('Missing or invalid environment variables');
-    }
-    throw error;
-  }
-}
-
-/**
- * Validated environment variables
- * Access these instead of process.env directly
- */
-export const env = validateEnv();
-
-/**
- * Type-safe environment variables
- */
-export type Env = z.infer<typeof envSchema>;
