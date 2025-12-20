@@ -27,11 +27,19 @@ const eslintConfig = defineConfig([
           message:
             "Use 'import * as React from \"react\"' instead of named imports. Access hooks via React.useState, React.useEffect, etc.",
         },
+      ],
+      // Block imports from React subpackages (e.g., 'react/jsx-runtime')
+      // Using no-restricted-imports for proper regex pattern matching
+      'no-restricted-imports': [
+        'error',
         {
-          selector:
-            "ImportDeclaration[source.value=/^react\\//]",
-          message:
-            "Use 'import * as React from \"react\"' instead of importing from 'react/*'.",
+          patterns: [
+            {
+              regex: '^react/',
+              message:
+                "Use 'import * as React from \"react\"' instead of importing from 'react/*'.",
+            },
+          ],
         },
       ],
     },

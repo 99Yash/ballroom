@@ -34,7 +34,7 @@ async function checkRateLimit(userId: string): Promise<boolean> {
   }
 
   // Create a new lock for this check
-  let resolveLock: () => void;
+  let resolveLock: (() => void) | undefined;
   const lock = new Promise<void>((resolve) => {
     resolveLock = resolve;
   });
@@ -52,8 +52,10 @@ async function checkRateLimit(userId: string): Promise<boolean> {
     rateLimitMap.set(userId, now);
     return false; // Not rate limited
   } finally {
-    // Release the lock
-    resolveLock!();
+    // Release the lock (resolveLock is guaranteed to be set by Promise constructor)
+    if (resolveLock) {
+      resolveLock();
+    }
     // Clean up the lock after a short delay to allow any waiting requests to proceed
     setTimeout(() => {
       if (rateLimitLocks.get(userId) === lock) {
