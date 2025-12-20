@@ -1,6 +1,6 @@
 import { google } from '@ai-sdk/google';
 import { generateObject } from 'ai';
-import { and, eq, inArray, isNull } from 'drizzle-orm';
+import { and, eq, inArray, isNull, lt, or } from 'drizzle-orm';
 import * as z from 'zod/v4';
 import { db } from '~/db';
 import { categories, DatabaseVideo, videos } from '~/db/schemas';
@@ -266,8 +266,17 @@ export async function categorizeUserVideos(
     return { categorized: 0, total: 0, skipped: 0 };
   }
 
+  // Get the latest category update timestamp
+  // This is used to determine if videos need re-categorization after category changes
+  const latestCategoryUpdate = userCategories.reduce((latest, category) => {
+    const updatedAt = category.updatedAt;
+    if (!updatedAt) return latest;
+    return updatedAt > latest ? updatedAt : latest;
+  }, new Date(0));
+
   // Get videos that need categorization
   // Only analyze videos that don't have a category assigned (unless force=true)
+  // Also re-analyze videos that were analyzed before the latest category update
   let videosToAnalyze: DatabaseVideo[] = [];
 
   if (force) {
@@ -282,11 +291,22 @@ export async function categorizeUserVideos(
       totalVideos: videosToAnalyze.length,
     });
   } else {
-    // Normal mode: only analyze videos without a category
+    // Normal mode: analyze videos that either:
+    // 1. Don't have a category assigned, OR
+    // 2. Were last analyzed before the most recent category update
     videosToAnalyze = await db
       .select()
       .from(videos)
-      .where(and(eq(videos.userId, userId), isNull(videos.categoryId)));
+      .where(
+        and(
+          eq(videos.userId, userId),
+          or(
+            isNull(videos.categoryId),
+            isNull(videos.lastAnalyzedAt),
+            lt(videos.lastAnalyzedAt, latestCategoryUpdate)
+          )
+        )
+      );
   }
 
   if (videosToAnalyze.length === 0) {
