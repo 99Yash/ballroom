@@ -3,7 +3,7 @@ import { generateObject } from 'ai';
 import { and, eq, inArray, isNull, lt, or } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '~/db';
-import { categories, videos } from '~/db/schemas';
+import { categories, DatabaseVideo, videos } from '~/db/schemas';
 import { logger } from '~/lib/logger';
 
 interface VideoForCategorization {
@@ -273,7 +273,7 @@ export async function categorizeUserVideos(
   }, 0);
 
   // Get videos that need categorization
-  let videosToAnalyze;
+  let videosToAnalyze: DatabaseVideo[] = [];
 
   if (force) {
     videosToAnalyze = await db
