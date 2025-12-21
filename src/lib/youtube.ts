@@ -3,8 +3,8 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { OAuth2Client } from 'google-auth-library';
 import { db } from '~/db';
 import { account, videos } from '~/db/schemas';
-import { AUTH_ERROR_TYPES, AuthenticationError } from '~/lib/errors';
 import { env } from '~/lib/env';
+import { AUTH_ERROR_TYPES, AuthenticationError } from '~/lib/errors';
 import { logger } from '~/lib/logger';
 
 export interface YouTubeVideo {
@@ -62,7 +62,6 @@ async function createYouTubeClient(userId: string) {
     expiry_date: acc.accessTokenExpiresAt?.getTime(),
   });
 
-  // Set up automatic token refresh and persistence
   oauth2Client.on('tokens', async (tokens) => {
     try {
       if (tokens.access_token) {

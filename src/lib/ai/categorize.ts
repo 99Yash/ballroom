@@ -51,12 +51,10 @@ async function retryWithBackoff<T>(
     } catch (error) {
       lastError = error;
 
-      // Don't retry on last attempt
       if (attempt === maxRetries) {
         break;
       }
 
-      // Check if it's a rate limit error or retryable error
       const isRateLimitError =
         error instanceof Error &&
         (error.message.includes('rate limit') ||
@@ -70,11 +68,9 @@ async function retryWithBackoff<T>(
           error.message.includes('ECONNRESET'));
 
       if (!isRateLimitError && !isRetryableError) {
-        // Don't retry non-retryable errors
         throw error;
       }
 
-      // Calculate delay with exponential backoff
       const delay = Math.min(
         initialDelayMs * Math.pow(backoffMultiplier, attempt),
         maxDelayMs
@@ -147,7 +143,6 @@ export async function categorizeVideos(
     return [];
   }
 
-  // Find the "Other" category for fallback
   const otherCategory = categories.find(
     (c) => c.name.toLowerCase() === 'other'
   );
@@ -240,7 +235,10 @@ export interface CategorizeResult {
  * Categorize all uncategorized videos for a user
  * This is a reusable function that can be called from API routes or background jobs
  */
-export async function categorizeUserVideos(userId: string, force: boolean = false) {
+export async function categorizeUserVideos(
+  userId: string,
+  force: boolean = false
+) {
   // Get user's categories
   const userCategories = await db
     .select()
@@ -252,17 +250,12 @@ export async function categorizeUserVideos(userId: string, force: boolean = fals
     return { categorized: 0, total: 0, skipped: 0 };
   }
 
-  // Get the latest category update timestamp
-  // This is used to determine if videos need re-categorization after category changes
   const latestCategoryUpdate = userCategories.reduce((latest, category) => {
     const updatedAt = category.updatedAt;
     if (!updatedAt) return latest;
     return updatedAt > latest ? updatedAt : latest;
   }, new Date(0));
 
-  // Get videos that need categorization
-  // Only analyze videos that don't have a category assigned (unless force=true)
-  // Also re-analyze videos that were analyzed before the latest category update
   let videosToAnalyze: DatabaseVideo[] = [];
 
   if (force) {
@@ -277,9 +270,6 @@ export async function categorizeUserVideos(userId: string, force: boolean = fals
       totalVideos: videosToAnalyze.length,
     });
   } else {
-    // Normal mode: analyze videos that either:
-    // 1. Don't have a category assigned, OR
-    // 2. Were last analyzed before the most recent category update
     videosToAnalyze = await db
       .select()
       .from(videos)
@@ -299,7 +289,6 @@ export async function categorizeUserVideos(userId: string, force: boolean = fals
     return { categorized: 0, total: 0, skipped: 0 };
   }
 
-  // Categorize videos using AI
   const categorizations = await categorizeVideosInBatches(
     videosToAnalyze.map((v) => ({
       id: v.id,
@@ -314,7 +303,6 @@ export async function categorizeUserVideos(userId: string, force: boolean = fals
     10
   );
 
-  // Create a map for quick lookup, filtering out invalid category IDs
   const validCategoryIds = new Set(userCategories.map((c) => c.id));
   const invalidCategorizations = categorizations.filter(
     (c) => !validCategoryIds.has(c.categoryId)
@@ -333,7 +321,6 @@ export async function categorizeUserVideos(userId: string, force: boolean = fals
       .map((c) => [c.videoId, c.categoryId])
   );
 
-  // Update videos with their categories
   const now = new Date();
   let categorizedCount = 0;
 

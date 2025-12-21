@@ -17,7 +17,7 @@ import { initialSyncTask } from '~/workflows/sync-videos';
 const isDevelopment = process.env.NODE_ENV === 'development';
 
 // In-memory rate limiting (per user, resets on server restart)
-const RATE_LIMIT_WINDOW_MS = 5 * 60 * 1000; // 5 minutes
+const RATE_LIMIT_WINDOW_MS = 5 * 60 * 1000;
 const rateLimitMap = new Map<string, number>();
 // Map to track pending rate limit checks per user (prevents race conditions)
 const rateLimitLocks = new Map<string, Promise<void>>();
@@ -27,13 +27,11 @@ const rateLimitLocks = new Map<string, Promise<void>>();
  * Uses a per-user lock to prevent concurrent requests from bypassing rate limits.
  */
 async function checkRateLimit(userId: string) {
-  // Wait for any pending rate limit check for this user
   const existingLock = rateLimitLocks.get(userId);
   if (existingLock) {
     await existingLock;
   }
 
-  // Create a new lock for this check
   let resolveLock: (() => void) | undefined;
   const lock = new Promise<void>((resolve) => {
     resolveLock = resolve;
@@ -45,18 +43,15 @@ async function checkRateLimit(userId: string) {
     const now = Date.now();
 
     if (lastRequest && now - lastRequest < RATE_LIMIT_WINDOW_MS) {
-      return true; // Rate limited
+      return true;
     }
 
-    // Atomically update the timestamp
     rateLimitMap.set(userId, now);
-    return false; // Not rate limited
+    return false;
   } finally {
-    // Release the lock (resolveLock is guaranteed to be set by Promise constructor)
     if (resolveLock) {
       resolveLock();
     }
-    // Clean up the lock after a short delay to allow any waiting requests to proceed
     setTimeout(() => {
       if (rateLimitLocks.get(userId) === lock) {
         rateLimitLocks.delete(userId);
@@ -78,7 +73,6 @@ export async function POST() {
   const startTime = Date.now();
 
   try {
-    // STRICT: Only allow in development environment
     if (!isDevelopment) {
       logger.warn('Full sync attempted in non-development environment');
       throw new AppError({
@@ -90,8 +84,6 @@ export async function POST() {
     const session = await requireSession();
     const userId = session.user.id;
 
-    // STRICT: Rate limiting - max 1 request per 5 minutes per user
-    // Uses atomic check-and-update to prevent race conditions
     const isLimited = await checkRateLimit(userId);
     if (isLimited) {
       const remainingSeconds = getRemainingCooldown(userId);

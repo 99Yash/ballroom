@@ -20,7 +20,6 @@ export async function GET() {
   try {
     const session = await requireSession();
 
-    // Single query to get all counts grouped by categoryId
     const categoryCounts = await db
       .select({
         categoryId: videos.categoryId,
@@ -30,8 +29,6 @@ export async function GET() {
       .where(eq(videos.userId, session.user.id))
       .groupBy(videos.categoryId);
 
-    // Also get total count in the same round-trip using a union-like approach
-    // Actually, we can derive total from summing the grouped results
     let total = 0;
     let uncategorized = 0;
     const byCategory: Record<string, number> = {};

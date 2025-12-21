@@ -20,7 +20,6 @@ export async function DELETE(
   try {
     const session = await requireSession();
 
-    // Verify ownership
     const category = await db
       .select()
       .from(categories)
@@ -69,13 +68,11 @@ export async function PATCH(
     const session = await requireSession();
     const body = await request.json();
 
-    // Validate request body
     const { name: trimmedName } = validateRequestBody(
       updateCategorySchema,
       body
     );
 
-    // Verify ownership
     const category = await db
       .select()
       .from(categories)
@@ -89,7 +86,6 @@ export async function PATCH(
       });
     }
 
-    // Check for duplicate name (excluding current category)
     const existing = await db
       .select()
       .from(categories)

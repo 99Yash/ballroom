@@ -1,7 +1,7 @@
-import { and, count, desc, eq, isNull } from 'drizzle-orm';
+import { and, desc, eq, isNull, sql, type SQL } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
 import { db } from '~/db';
-import { categories, videos } from '~/db/schemas';
+import { categories, createVideoSearchVector, videos } from '~/db/schemas';
 import { requireSession } from '~/lib/auth/session';
 import { createErrorResponse } from '~/lib/errors';
 import { logger } from '~/lib/logger';
@@ -14,12 +14,40 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const categoryId = searchParams.get('categoryId');
     const uncategorized = searchParams.get('uncategorized') === 'true';
+    const rawSearchQuery = searchParams.get('search');
+    const MAX_SEARCH_QUERY_LENGTH = 300;
+    if (rawSearchQuery && rawSearchQuery.length > MAX_SEARCH_QUERY_LENGTH) {
+      return NextResponse.json(
+        {
+          error: `Search query is too long. Maximum length is ${MAX_SEARCH_QUERY_LENGTH} characters.`,
+        },
+        { status: 400 }
+      );
+    }
+    const searchQuery = rawSearchQuery?.trim();
     const baseConditions = [eq(videos.userId, session.user.id)];
 
     if (uncategorized) {
       baseConditions.push(isNull(videos.categoryId));
     } else if (categoryId) {
       baseConditions.push(eq(videos.categoryId, categoryId));
+    }
+
+    let searchExpr: SQL | null = null;
+    let searchRank: SQL | null = null;
+    if (searchQuery && searchQuery.length > 0) {
+      const tsquery = sql`websearch_to_tsquery('simple', ${searchQuery})`;
+      searchExpr = createVideoSearchVector(
+        videos.title,
+        videos.description,
+        videos.channelName
+      );
+
+      // websearch_to_tsquery always returns a valid tsquery (never NULL), so no need to check
+      const searchCondition = sql`${searchExpr} @@ ${tsquery}`;
+      baseConditions.push(searchCondition);
+
+      searchRank = sql`ts_rank(${searchExpr}, ${tsquery})`;
     }
 
     const page = parseInt(searchParams.get('page') || '1', 10);
@@ -29,16 +57,8 @@ export async function GET(request: Request) {
     );
     const offset = (page - 1) * limit;
 
-    // Get total count for pagination
-    const [countResult] = await db
-      .select({ count: count() })
-      .from(videos)
-      .where(and(...baseConditions));
-
-    const totalCount = countResult?.count || 0;
-
-    // Fetch videos with only the fields we need (matches Video type)
-    const userVideos = await db
+    // Use window function to get total count in the same query, avoiding duplicate full-text search
+    const queryBuilder = db
       .select({
         id: videos.id,
         youtubeId: videos.youtubeId,
@@ -49,15 +69,26 @@ export async function GET(request: Request) {
         publishedAt: videos.publishedAt,
         categoryId: videos.categoryId,
         categoryName: categories.name,
+        totalCount: sql<number>`COUNT(*) OVER()`.as('total_count'),
       })
       .from(videos)
       .leftJoin(categories, eq(videos.categoryId, categories.id))
-      .where(and(...baseConditions))
-      .orderBy(desc(videos.createdAt))
-      .limit(limit)
-      .offset(offset);
+      .where(and(...baseConditions));
 
-    const serializedVideos = userVideos.map(serializeVideo);
+    const orderedQuery = searchRank
+      ? queryBuilder.orderBy(desc(searchRank), desc(videos.createdAt))
+      : queryBuilder.orderBy(desc(videos.createdAt));
+
+    const userVideos = await orderedQuery.limit(limit).offset(offset);
+
+    const totalCount = userVideos[0]?.totalCount ?? 0;
+
+    // Remove totalCount from video objects before serialization (it's not part of Video type)
+    const serializedVideos = userVideos.map((video) => {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { totalCount: _, ...videoWithoutCount } = video;
+      return serializeVideo(videoWithoutCount);
+    });
 
     logger.api('GET', '/api/youtube/videos', {
       userId: session.user.id,

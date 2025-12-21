@@ -70,7 +70,6 @@ export async function POST(request: Request) {
       });
     }
 
-    // Validate the category name using AI (unless skipped)
     if (!skipValidation) {
       const validation = await validateCategoryName(trimmedName);
       if (!validation.valid) {
@@ -115,7 +114,6 @@ export async function POST(request: Request) {
   }
 }
 
-// Initialize default categories for a new user
 export async function initializeDefaultCategories(userId: string) {
   const existing = await db
     .select()

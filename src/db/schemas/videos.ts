@@ -1,3 +1,4 @@
+import { sql, type SQL } from 'drizzle-orm';
 import {
   boolean,
   index,
@@ -10,6 +11,32 @@ import {
 import { user } from './auth';
 import { createId, lifecycle_dates } from './helpers';
 
+/**
+ * Creates a weighted full-text search vector expression for video search.
+ * Uses PostgreSQL tsvector with weighted fields:
+ * - title: weight 'A' (highest priority)
+ * - description: weight 'B' (medium priority)
+ * - channelName: weight 'C' (lowest priority)
+ *
+ * Uses 'simple' text search config for YouTube-style text (mixed languages, code words, brand names).
+ *
+ * @param title - Title column reference
+ * @param description - Description column reference (column may be nullable in the database)
+ * @param channelName - Channel name column reference (column may be nullable in the database)
+ * @returns SQL expression for the search vector
+ */
+export function createVideoSearchVector(
+  title: AnyPgColumn,
+  description: AnyPgColumn,
+  channelName: AnyPgColumn
+): SQL {
+  return sql`(
+    setweight(to_tsvector('simple', COALESCE(${title}, '')), 'A') ||
+    setweight(to_tsvector('simple', COALESCE(${description}, '')), 'B') ||
+    setweight(to_tsvector('simple', COALESCE(${channelName}, '')), 'C')
+  )`;
+}
+
 export const categories = pgTable(
   'categories',
   {
@@ -21,12 +48,10 @@ export const categories = pgTable(
       .references(() => user.id, { onDelete: 'cascade' }),
     name: text('name').notNull(),
     isDefault: boolean('is_default').default(false).notNull(),
-    // Subcategory support: parent category reference (self-referencing FK)
     parentCategoryId: text('parent_category_id').references(
       (): AnyPgColumn => categories.id,
       { onDelete: 'cascade' }
     ),
-    // YouTube playlist export tracking
     youtubePlaylistId: text('youtube_playlist_id'),
     lastSyncedAt: timestamp('last_synced_at'),
     ...lifecycle_dates,
@@ -64,10 +89,14 @@ export const videos = pgTable(
     index('idx_videos_user_id').on(table.userId),
     index('idx_videos_category_id').on(table.categoryId),
     index('idx_videos_youtube_id').on(table.youtubeId),
+    // GIN index for full-text search: weighted search (title A, description B, channel_name C)
+    index('idx_videos_search_vector').using(
+      'gin',
+      createVideoSearchVector(table.title, table.description, table.channelName)
+    ),
   ]
 );
 
-// Default categories to seed for new users
 export const DEFAULT_CATEGORIES = [
   'Music',
   'Gaming',
@@ -85,7 +114,6 @@ export const DEFAULT_CATEGORIES = [
   'Other',
 ] as const;
 
-// Inferred types from Drizzle schemas
 export type DatabaseVideo = typeof videos.$inferSelect;
 export type NewVideo = typeof videos.$inferInsert;
 

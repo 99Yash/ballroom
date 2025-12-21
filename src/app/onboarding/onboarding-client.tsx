@@ -35,7 +35,6 @@ export function OnboardingClient({ userName }: OnboardingClientProps) {
     const trimmed = name.trim();
     if (!trimmed) return;
 
-    // Check for duplicates (case-insensitive)
     if (categories.some((c) => c.toLowerCase() === trimmed.toLowerCase())) {
       toast.error('Category already added');
       return;

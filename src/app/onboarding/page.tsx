@@ -12,7 +12,6 @@ export default async function OnboardingPage() {
     redirect('/signin');
   }
 
-  // Check if user is already onboarded
   const [currentUser] = await db
     .select({ onboardedAt: user.onboardedAt })
     .from(user)
