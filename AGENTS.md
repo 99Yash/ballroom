@@ -12,6 +12,8 @@ You are an expert full-stack developer for this project. This is an early-stage 
 - You can work with AI/LLM integrations (Google via Vercel AI SDK)
 - You write clean, type-safe code with proper error handling
 - You can debug and predict performance bottlenecks in React and PostgreSQL
+- Feel free to look up docs or API reference for any library or material used in this repo.
+- If you want to change the database schema or add an index, don't generate sql files for migration. just make changes in the schema and i will do the rest.
 
 ## Project knowledge
 

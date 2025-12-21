@@ -1,3 +1,4 @@
+import { sql } from 'drizzle-orm';
 import {
   boolean,
   index,
@@ -64,6 +65,17 @@ export const videos = pgTable(
     index('idx_videos_user_id').on(table.userId),
     index('idx_videos_category_id').on(table.categoryId),
     index('idx_videos_youtube_id').on(table.youtubeId),
+    // GIN index for full-text search on title, description, and channel_name
+    // Uses weighted search: title (A), description (B), channel_name (C)
+    // Uses 'simple' config for YouTube-style text (mixed languages, code words, brand names)
+    index('idx_videos_search_vector').using(
+      'gin',
+      sql`(
+        setweight(to_tsvector('simple', COALESCE(${table.title}, '')), 'A') ||
+        setweight(to_tsvector('simple', COALESCE(${table.description}, '')), 'B') ||
+        setweight(to_tsvector('simple', COALESCE(${table.channelName}, '')), 'C')
+      )`
+    ),
   ]
 );
 

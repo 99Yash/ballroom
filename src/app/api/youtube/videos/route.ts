@@ -1,4 +1,4 @@
-import { and, count, desc, eq, ilike, isNull, or } from 'drizzle-orm';
+import { and, count, desc, eq, isNull, sql, type SQL } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
 import { db } from '~/db';
 import { categories, videos } from '~/db/schemas';
@@ -24,16 +24,29 @@ export async function GET(request: Request) {
     }
 
     // Add search conditions if search query is provided
-    if (searchQuery) {
-      const searchPattern = `%${searchQuery}%`;
-      // title is notNull, so at least one condition will always be valid
-      baseConditions.push(
-        or(
-          ilike(videos.title, searchPattern),
-          ilike(videos.description, searchPattern),
-          ilike(videos.channelName, searchPattern)
-        )
-      );
+    // Use PostgreSQL full-text search with tsvector for better performance
+    // Uses weighted search: title (A), description (B), channel_name (C)
+    // Uses 'simple' config for YouTube-style text (mixed languages, code words, brand names)
+    // websearch_to_tsquery supports web search engine-like syntax (or, and, etc.)
+    let searchExpr: SQL | null = null;
+    let searchRank: SQL | null = null;
+    if (searchQuery && searchQuery.length > 0) {
+      // Guard against empty/stop-word queries
+      // websearch_to_tsquery returns null for empty/meaningless queries (e.g., only stop words)
+      const tsquery = sql`websearch_to_tsquery('simple', ${searchQuery})`;
+
+      searchExpr = sql`(
+        setweight(to_tsvector('simple', COALESCE(${videos.title}, '')), 'A') ||
+        setweight(to_tsvector('simple', COALESCE(${videos.description}, '')), 'B') ||
+        setweight(to_tsvector('simple', COALESCE(${videos.channelName}, '')), 'C')
+      )`;
+
+      // Only add search condition if query produces valid tsquery (guards against stop words)
+      const searchCondition = sql`${searchExpr} @@ ${tsquery} AND ${tsquery} IS NOT NULL`;
+      baseConditions.push(searchCondition);
+
+      // Add ranking for ordering results by relevance
+      searchRank = sql`ts_rank(${searchExpr}, ${tsquery})`;
     }
 
     const page = parseInt(searchParams.get('page') || '1', 10);
@@ -52,7 +65,8 @@ export async function GET(request: Request) {
     const totalCount = countResult?.count || 0;
 
     // Fetch videos with only the fields we need (matches Video type)
-    const userVideos = await db
+    // Order by search rank (relevance) if searching, otherwise by creation date
+    const queryBuilder = db
       .select({
         id: videos.id,
         youtubeId: videos.youtubeId,
@@ -66,10 +80,14 @@ export async function GET(request: Request) {
       })
       .from(videos)
       .leftJoin(categories, eq(videos.categoryId, categories.id))
-      .where(and(...baseConditions))
-      .orderBy(desc(videos.createdAt))
-      .limit(limit)
-      .offset(offset);
+      .where(and(...baseConditions));
+
+    // Apply ordering: by relevance rank if searching, otherwise by creation date
+    const orderedQuery = searchRank
+      ? queryBuilder.orderBy(desc(searchRank), desc(videos.createdAt))
+      : queryBuilder.orderBy(desc(videos.createdAt));
+
+    const userVideos = await orderedQuery.limit(limit).offset(offset);
 
     const serializedVideos = userVideos.map(serializeVideo);
 
