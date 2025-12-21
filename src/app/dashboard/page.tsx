@@ -12,7 +12,6 @@ export default async function DashboardPage() {
     redirect('/signin');
   }
 
-  // Check if user has completed onboarding
   const [currentUser] = await db
     .select({ onboardedAt: user.onboardedAt })
     .from(user)
@@ -22,7 +21,6 @@ export default async function DashboardPage() {
     redirect('/onboarding');
   }
 
-  // Fetch user's categories (videos will be loaded via API with pagination)
   const userCategories = await db
     .select()
     .from(categories)

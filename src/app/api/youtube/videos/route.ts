@@ -23,16 +23,12 @@ export async function GET(request: Request) {
       baseConditions.push(eq(videos.categoryId, categoryId));
     }
 
-    // Add search conditions if search query is provided
-    // Use PostgreSQL full-text search with tsvector for better performance
-    // Uses weighted search: title (A), description (B), channel_name (C)
+    // Use PostgreSQL full-text search with tsvector
+    // Weighted search: title (A), description (B), channel_name (C)
     // Uses 'simple' config for YouTube-style text (mixed languages, code words, brand names)
-    // websearch_to_tsquery supports web search engine-like syntax (or, and, etc.)
     let searchExpr: SQL | null = null;
     let searchRank: SQL | null = null;
     if (searchQuery && searchQuery.length > 0) {
-      // Guard against empty/stop-word queries
-      // websearch_to_tsquery returns null for empty/meaningless queries (e.g., only stop words)
       const tsquery = sql`websearch_to_tsquery('simple', ${searchQuery})`;
 
       searchExpr = sql`(
@@ -41,11 +37,9 @@ export async function GET(request: Request) {
         setweight(to_tsvector('simple', COALESCE(${videos.channelName}, '')), 'C')
       )`;
 
-      // Only add search condition if query produces valid tsquery (guards against stop words)
       const searchCondition = sql`${searchExpr} @@ ${tsquery} AND ${tsquery} IS NOT NULL`;
       baseConditions.push(searchCondition);
 
-      // Add ranking for ordering results by relevance
       searchRank = sql`ts_rank(${searchExpr}, ${tsquery})`;
     }
 
@@ -56,7 +50,6 @@ export async function GET(request: Request) {
     );
     const offset = (page - 1) * limit;
 
-    // Get total count for pagination
     const [countResult] = await db
       .select({ count: count() })
       .from(videos)
@@ -64,8 +57,6 @@ export async function GET(request: Request) {
 
     const totalCount = countResult?.count || 0;
 
-    // Fetch videos with only the fields we need (matches Video type)
-    // Order by search rank (relevance) if searching, otherwise by creation date
     const queryBuilder = db
       .select({
         id: videos.id,
@@ -82,7 +73,6 @@ export async function GET(request: Request) {
       .leftJoin(categories, eq(videos.categoryId, categories.id))
       .where(and(...baseConditions));
 
-    // Apply ordering: by relevance rank if searching, otherwise by creation date
     const orderedQuery = searchRank
       ? queryBuilder.orderBy(desc(searchRank), desc(videos.createdAt))
       : queryBuilder.orderBy(desc(videos.createdAt));

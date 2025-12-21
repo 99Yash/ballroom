@@ -50,7 +50,6 @@ export function DashboardClient({
   const [isLoading, setIsLoading] = React.useState(true);
   const limit = 24;
 
-  // Debounce search query
   React.useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearchQuery(searchQuery);
@@ -59,7 +58,6 @@ export function DashboardClient({
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  // Reset to page 1 when search or category changes
   React.useEffect(() => {
     setCurrentPage(1);
   }, [debouncedSearchQuery, selectedCategory]);
@@ -228,7 +226,6 @@ export function DashboardClient({
           />
         </div>
 
-        {/* Search Input */}
         <div className="mb-6">
           <div className="relative max-w-md">
             <Search

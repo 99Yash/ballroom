@@ -22,12 +22,10 @@ export const categories = pgTable(
       .references(() => user.id, { onDelete: 'cascade' }),
     name: text('name').notNull(),
     isDefault: boolean('is_default').default(false).notNull(),
-    // Subcategory support: parent category reference (self-referencing FK)
     parentCategoryId: text('parent_category_id').references(
       (): AnyPgColumn => categories.id,
       { onDelete: 'cascade' }
     ),
-    // YouTube playlist export tracking
     youtubePlaylistId: text('youtube_playlist_id'),
     lastSyncedAt: timestamp('last_synced_at'),
     ...lifecycle_dates,
@@ -65,9 +63,7 @@ export const videos = pgTable(
     index('idx_videos_user_id').on(table.userId),
     index('idx_videos_category_id').on(table.categoryId),
     index('idx_videos_youtube_id').on(table.youtubeId),
-    // GIN index for full-text search on title, description, and channel_name
-    // Uses weighted search: title (A), description (B), channel_name (C)
-    // Uses 'simple' config for YouTube-style text (mixed languages, code words, brand names)
+    // GIN index for full-text search: weighted search (title A, description B, channel_name C)
     index('idx_videos_search_vector').using(
       'gin',
       sql`(
@@ -79,7 +75,6 @@ export const videos = pgTable(
   ]
 );
 
-// Default categories to seed for new users
 export const DEFAULT_CATEGORIES = [
   'Music',
   'Gaming',
@@ -97,7 +92,6 @@ export const DEFAULT_CATEGORIES = [
   'Other',
 ] as const;
 
-// Inferred types from Drizzle schemas
 export type DatabaseVideo = typeof videos.$inferSelect;
 export type NewVideo = typeof videos.$inferInsert;
 

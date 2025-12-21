@@ -62,7 +62,6 @@ async function createYouTubeClient(userId: string) {
     expiry_date: acc.accessTokenExpiresAt?.getTime(),
   });
 
-  // Set up automatic token refresh and persistence
   oauth2Client.on('tokens', async (tokens) => {
     try {
       if (tokens.access_token) {
