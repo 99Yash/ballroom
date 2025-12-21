@@ -19,7 +19,6 @@ import {
 import { VideoCard } from '~/components/video-card';
 import { authClient } from '~/lib/auth/client';
 import { siteConfig } from '~/lib/site';
-import { cn } from '~/lib/utils';
 import type { SerializedVideo } from '~/types/video';
 
 interface Category {
