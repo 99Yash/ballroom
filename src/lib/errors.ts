@@ -112,7 +112,7 @@ export class AuthenticationError extends AppError {
    * (as opposed to a temporary failure that might be retried)
    */
   requiresReauthentication(): boolean {
-    const reauthTypes = [
+    const reauthTypes: AuthErrorType[] = [
       AUTH_ERROR_TYPES.NO_ACCOUNT,
       AUTH_ERROR_TYPES.NO_ACCESS_TOKEN,
       AUTH_ERROR_TYPES.NO_REFRESH_TOKEN,
