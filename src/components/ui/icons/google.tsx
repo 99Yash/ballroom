@@ -9,6 +9,52 @@ export const Google: React.FC<{ className?: string }> = ({ className }) => (
     fill="none"
     xmlns="http://www.w3.org/2000/svg"
   >
+    <defs>
+      <linearGradient
+        id="paint0_linear_8026_76"
+        x1="13.1633"
+        y1="10.6757"
+        x2="21"
+        y2="10.6757"
+        gradientUnits="userSpaceOnUse"
+      >
+        <stop stopColor="#4285F4" />
+        <stop offset="1" stopColor="#34A853" />
+      </linearGradient>
+      <linearGradient
+        id="paint1_linear_8026_76"
+        x1="5.87064"
+        y1="15.8276"
+        x2="18.5691"
+        y2="15.8276"
+        gradientUnits="userSpaceOnUse"
+      >
+        <stop stopColor="#34A853" />
+        <stop offset="1" stopColor="#FBBC05" />
+      </linearGradient>
+      <linearGradient
+        id="paint2_linear_8026_76"
+        x1="5.87073"
+        y1="8.49887"
+        x2="8.51924"
+        y2="13.7778"
+        gradientUnits="userSpaceOnUse"
+      >
+        <stop stopColor="#FBBC05" />
+        <stop offset="1" stopColor="#EA4335" />
+      </linearGradient>
+      <linearGradient
+        id="paint3_linear_8026_76"
+        x1="5.87064"
+        y1="8.49883"
+        x2="18.6235"
+        y2="6.12245"
+        gradientUnits="userSpaceOnUse"
+      >
+        <stop stopColor="#EA4335" />
+        <stop offset="1" stopColor="#4285F4" />
+      </linearGradient>
+    </defs>
     <path
       d="M21 12.3446C21 11.6734 20.9456 11.1836 20.8277 10.6757H13.1633V13.7052H17.6621C17.5715 14.458 17.0817 15.5918 15.9932 16.3537L15.978 16.4551L18.4013 18.3324L18.5692 18.3492C20.1111 16.9251 21 14.8299 21 12.3446Z"
       fill="url(#paint0_linear_8026_76)"
