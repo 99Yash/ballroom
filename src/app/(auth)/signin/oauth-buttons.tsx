@@ -21,18 +21,9 @@ interface OAuthButtonProps {
 }
 
 const OAuthButton: React.FC<OAuthButtonProps> = ({ providerId }) => {
-  const [lastAuthMethod, setLastAuthMethod] =
-    React.useState<AuthOptionsType | null>(null);
   const [isLoading, setIsLoading] = React.useState(false);
 
   const provider = getProviderById(providerId);
-
-  React.useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const lastAuthMethod = getLocalStorageItem('LAST_AUTH_METHOD');
-      setLastAuthMethod(lastAuthMethod ?? null);
-    }
-  }, []);
 
   const handleOAuthSignIn = React.useCallback(async () => {
     if (!provider) {
@@ -70,27 +61,22 @@ const OAuthButton: React.FC<OAuthButtonProps> = ({ providerId }) => {
     return null;
   };
 
-  const isLastUsed =
-    lastAuthMethod === (provider.id.toUpperCase() as AuthOptionsType);
-
   return (
     <button
       onClick={handleOAuthSignIn}
       disabled={isLoading}
-      className="relative flex w-full items-center justify-center gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm font-medium text-foreground transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+      className="group relative flex w-full items-center justify-center gap-3 rounded-xl border border-border bg-card px-6 py-4 text-sm font-medium text-foreground shadow-sm transition-all duration-200 hover:border-ring hover:bg-accent hover:shadow-md disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-border disabled:hover:bg-card disabled:hover:shadow-sm"
     >
-      {renderIcon()}
-      <span>
-        {isLoading ? 'Signing in…' : `Continue with ${provider.name}`}
-      </span>
       {isLoading ? (
-        <Spinner className="absolute right-4 bg-white" />
+        <>
+          <Spinner className="size-5" />
+          <span>Signing in…</span>
+        </>
       ) : (
-        isLastUsed && (
-          <span className="absolute right-4 text-xs text-muted-foreground">
-            Last used
-          </span>
-        )
+        <>
+          {renderIcon()}
+          <span>Continue with {provider.name}</span>
+        </>
       )}
     </button>
   );
@@ -98,7 +84,7 @@ const OAuthButton: React.FC<OAuthButtonProps> = ({ providerId }) => {
 
 export const OAuthButtons: React.FC = () => {
   return (
-    <div className="space-y-2">
+    <div>
       {Object.values(OAUTH_PROVIDERS).map((provider) => (
         <OAuthButton
           key={provider.id}
