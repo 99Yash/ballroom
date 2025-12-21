@@ -14,7 +14,17 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const categoryId = searchParams.get('categoryId');
     const uncategorized = searchParams.get('uncategorized') === 'true';
-    const searchQuery = searchParams.get('search')?.trim();
+    const rawSearchQuery = searchParams.get('search');
+    const MAX_SEARCH_QUERY_LENGTH = 300;
+    if (rawSearchQuery && rawSearchQuery.length > MAX_SEARCH_QUERY_LENGTH) {
+      return NextResponse.json(
+        {
+          error: `Search query is too long. Maximum length is ${MAX_SEARCH_QUERY_LENGTH} characters.`,
+        },
+        { status: 400 }
+      );
+    }
+    const searchQuery = rawSearchQuery?.trim();
     const baseConditions = [eq(videos.userId, session.user.id)];
 
     if (uncategorized) {
