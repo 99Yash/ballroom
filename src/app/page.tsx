@@ -16,12 +16,24 @@ export default async function Home() {
   return (
     <div className="relative min-h-screen overflow-hidden bg-background">
       {/* Subtle background gradient */}
-      <div className="absolute inset-0 bg-gradient-to-br from-background via-background to-muted/20" />
+      <div
+        className="absolute inset-0 bg-gradient-to-br from-background via-background to-muted/20"
+        aria-hidden="true"
+      />
       
       {/* Decorative elements */}
-      <div className="absolute -top-40 -right-40 h-80 w-80 rounded-full bg-brand/5 blur-3xl" />
-      <div className="absolute -bottom-40 -left-40 h-80 w-80 rounded-full bg-brand/5 blur-3xl" />
-      <div className="absolute top-1/2 left-1/2 h-96 w-96 -translate-x-1/2 -translate-y-1/2 rounded-full bg-brand/3 blur-3xl" />
+      <div
+        className="absolute -top-40 -right-40 h-80 w-80 rounded-full bg-brand/5 blur-3xl"
+        aria-hidden="true"
+      />
+      <div
+        className="absolute -bottom-40 -left-40 h-80 w-80 rounded-full bg-brand/5 blur-3xl"
+        aria-hidden="true"
+      />
+      <div
+        className="absolute top-1/2 left-1/2 h-96 w-96 -translate-x-1/2 -translate-y-1/2 rounded-full bg-brand/3 blur-3xl"
+        aria-hidden="true"
+      />
 
       <main className="relative z-10">
         {/* Hero Section */}
@@ -30,7 +42,10 @@ export default async function Home() {
             {/* Logo/Brand */}
             <div className="mb-20 flex items-center justify-center">
               <div className="group relative">
-                <div className="absolute -inset-1 rounded-2xl bg-gradient-to-r from-brand/20 via-brand/30 to-brand/20 opacity-0 blur transition-opacity duration-300 group-hover:opacity-100" />
+                <div
+                  className="absolute -inset-1 rounded-2xl bg-gradient-to-r from-brand/20 via-brand/30 to-brand/20 opacity-0 blur transition-opacity duration-300 group-hover:opacity-100"
+                  aria-hidden="true"
+                />
                 <div className="relative flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-brand to-brand/80 shadow-lg shadow-brand/20 transition-transform group-hover:scale-105">
                   <Sparkles className="h-8 w-8 text-brand-foreground" />
                 </div>
@@ -53,7 +68,10 @@ export default async function Home() {
                   <span className="relative z-10 font-semibold text-foreground">
                     seconds, not hours
                   </span>
-                  <span className="absolute -bottom-1 left-0 right-0 h-3 bg-gradient-to-r from-brand/20 via-brand/30 to-brand/20 blur-sm" />
+                  <span
+                    className="absolute -bottom-1 left-0 right-0 h-3 bg-gradient-to-r from-brand/20 via-brand/30 to-brand/20 blur-sm"
+                    aria-hidden="true"
+                  />
                 </span>
               </p>
             </div>
@@ -84,7 +102,10 @@ export default async function Home() {
                   Organize My Videos
                   <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
                 </span>
-                <span className="absolute inset-0 -z-0 bg-gradient-to-r from-transparent via-white/10 to-transparent translate-x-[-200%] group-hover:translate-x-[200%] transition-transform duration-1000" />
+                <span
+                  className="absolute inset-0 -z-0 bg-gradient-to-r from-transparent via-white/10 to-transparent translate-x-[-200%] group-hover:translate-x-[200%] transition-transform duration-1000"
+                  aria-hidden="true"
+                />
               </Link>
               <p className="text-sm text-muted-foreground">
                 Free to start. Connect with Google in seconds.
@@ -162,10 +183,16 @@ function FeatureCard({
       )}
     >
       {/* Subtle gradient overlay on hover */}
-      <div className="absolute inset-0 bg-gradient-to-br from-brand/0 via-brand/0 to-brand/5 opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+      <div
+        className="absolute inset-0 bg-gradient-to-br from-brand/0 via-brand/0 to-brand/5 opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+        aria-hidden="true"
+      />
       
       <div className="relative z-10">
-        <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-brand/10 text-brand transition-all duration-300 group-hover:scale-110 group-hover:bg-brand/15">
+        <div
+          className="mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-brand/10 text-brand transition-all duration-300 group-hover:scale-110 group-hover:bg-brand/15"
+          aria-hidden="true"
+        >
           {icon}
         </div>
         <h3 className="mb-3 text-lg font-semibold text-foreground">{title}</h3>
