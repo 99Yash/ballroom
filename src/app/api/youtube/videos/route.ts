@@ -1,7 +1,7 @@
 import { and, count, desc, eq, isNull, sql, type SQL } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
 import { db } from '~/db';
-import { categories, videos } from '~/db/schemas';
+import { categories, createVideoSearchVector, videos } from '~/db/schemas';
 import { requireSession } from '~/lib/auth/session';
 import { createErrorResponse } from '~/lib/errors';
 import { logger } from '~/lib/logger';
@@ -30,14 +30,14 @@ export async function GET(request: Request) {
     let searchRank: SQL | null = null;
     if (searchQuery && searchQuery.length > 0) {
       const tsquery = sql`websearch_to_tsquery('simple', ${searchQuery})`;
+      searchExpr = createVideoSearchVector(
+        videos.title,
+        videos.description,
+        videos.channelName
+      );
 
-      searchExpr = sql`(
-        setweight(to_tsvector('simple', COALESCE(${videos.title}, '')), 'A') ||
-        setweight(to_tsvector('simple', COALESCE(${videos.description}, '')), 'B') ||
-        setweight(to_tsvector('simple', COALESCE(${videos.channelName}, '')), 'C')
-      )`;
-
-      const searchCondition = sql`${searchExpr} @@ ${tsquery} AND ${tsquery} IS NOT NULL`;
+      // websearch_to_tsquery always returns a valid tsquery (never NULL), so no need to check
+      const searchCondition = sql`${searchExpr} @@ ${tsquery}`;
       baseConditions.push(searchCondition);
 
       searchRank = sql`ts_rank(${searchExpr}, ${tsquery})`;

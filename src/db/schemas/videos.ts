@@ -1,4 +1,4 @@
-import { sql } from 'drizzle-orm';
+import { sql, type SQL } from 'drizzle-orm';
 import {
   boolean,
   index,
@@ -10,6 +10,32 @@ import {
 } from 'drizzle-orm/pg-core';
 import { user } from './auth';
 import { createId, lifecycle_dates } from './helpers';
+
+/**
+ * Creates a weighted full-text search vector expression for video search.
+ * Uses PostgreSQL tsvector with weighted fields:
+ * - title: weight 'A' (highest priority)
+ * - description: weight 'B' (medium priority)
+ * - channelName: weight 'C' (lowest priority)
+ *
+ * Uses 'simple' text search config for YouTube-style text (mixed languages, code words, brand names).
+ *
+ * @param title - Title column reference
+ * @param description - Description column reference (nullable)
+ * @param channelName - Channel name column reference (nullable)
+ * @returns SQL expression for the search vector
+ */
+export function createVideoSearchVector(
+  title: AnyPgColumn,
+  description: AnyPgColumn | null,
+  channelName: AnyPgColumn | null
+): SQL {
+  return sql`(
+    setweight(to_tsvector('simple', COALESCE(${title}, '')), 'A') ||
+    setweight(to_tsvector('simple', COALESCE(${description}, '')), 'B') ||
+    setweight(to_tsvector('simple', COALESCE(${channelName}, '')), 'C')
+  )`;
+}
 
 export const categories = pgTable(
   'categories',
@@ -66,11 +92,7 @@ export const videos = pgTable(
     // GIN index for full-text search: weighted search (title A, description B, channel_name C)
     index('idx_videos_search_vector').using(
       'gin',
-      sql`(
-        setweight(to_tsvector('simple', COALESCE(${table.title}, '')), 'A') ||
-        setweight(to_tsvector('simple', COALESCE(${table.description}, '')), 'B') ||
-        setweight(to_tsvector('simple', COALESCE(${table.channelName}, '')), 'C')
-      )`
+      createVideoSearchVector(table.title, table.description, table.channelName)
     ),
   ]
 );
