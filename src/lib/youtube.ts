@@ -20,9 +20,7 @@ export interface YouTubeVideo {
 /**
  * Create an authenticated YouTube client for a user
  */
-async function createYouTubeClient(
-  userId: string
-): Promise<youtube_v3.Youtube> {
+async function createYouTubeClient(userId: string) {
   const userAccount = await db
     .select()
     .from(account)
@@ -94,9 +92,7 @@ async function createYouTubeClient(
 /**
  * Transform YouTube API video item to our YouTubeVideo type
  */
-function transformVideoItem(
-  item: youtube_v3.Schema$Video
-): YouTubeVideo | null {
+function transformVideoItem(item: youtube_v3.Schema$Video) {
   const snippet = item.snippet;
   if (!snippet || !item.id) {
     return null;
@@ -127,11 +123,7 @@ export async function fetchLikedVideos(
   userId: string,
   maxResults: number = 50,
   pageToken?: string
-): Promise<{
-  videos: YouTubeVideo[];
-  nextPageToken?: string;
-  totalResults: number;
-}> {
+) {
   const yt = await createYouTubeClient(userId);
 
   const response = await yt.videos.list({
@@ -156,10 +148,7 @@ export async function fetchLikedVideos(
 /**
  * Fetch all liked videos (handles pagination)
  */
-export async function fetchAllLikedVideos(
-  userId: string,
-  limit?: number
-): Promise<YouTubeVideo[]> {
+export async function fetchAllLikedVideos(userId: string, limit?: number) {
   const allVideos: YouTubeVideo[] = [];
   let pageToken: string | undefined;
 
@@ -193,10 +182,7 @@ export interface SyncResult {
  * Sync liked videos from YouTube to the database
  * This is a reusable function that can be called from API routes or background jobs
  */
-export async function syncLikedVideosForUser(
-  userId: string,
-  limit?: number
-): Promise<SyncResult> {
+export async function syncLikedVideosForUser(userId: string, limit?: number) {
   const likedVideos = await fetchAllLikedVideos(userId, limit);
 
   if (likedVideos.length === 0) {

@@ -47,7 +47,7 @@ export async function GET() {
       }
     }
 
-    const response: CountsResponse = {
+    const response = {
       total,
       uncategorized,
       byCategory,
