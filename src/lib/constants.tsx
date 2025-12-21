@@ -1,5 +1,5 @@
 import * as z from 'zod/v4';
-import { Google } from '~/components/ui/icons';
+import { Google } from '~/components/ui/icons/google';
 
 export const authOptionsSchema = z.enum(['GOOGLE']);
 export type AuthOptionsType = z.infer<typeof authOptionsSchema>;

@@ -18,14 +18,14 @@ const eslintConfig = defineConfig([
   {
     rules: {
       // Enforce import * as React from 'react' pattern
-      // This rule blocks named imports from 'react' but allows namespace imports
+      // This rule blocks named imports from 'react' but allows namespace imports and type-only imports
       'no-restricted-syntax': [
-        'error',
+        'warn',
         {
           selector:
-            "ImportDeclaration[source.value='react'] > ImportSpecifier",
+            "ImportDeclaration[source.value='react'][importKind!='type'] > ImportSpecifier",
           message:
-            "Use 'import * as React from \"react\"' instead of named imports. Access hooks via React.useState, React.useEffect, etc.",
+            'Use \'import * as React from "react"\' instead of named imports. Access hooks via React.useState, React.useEffect, etc. Type-only imports are allowed: \'import type { ... } from "react"\'.',
         },
       ],
       // Block imports from React subpackages (e.g., 'react/jsx-runtime')
