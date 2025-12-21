@@ -117,7 +117,7 @@ export default async function Home() {
               <FeatureCard
                 icon={<Zap className="h-6 w-6" />}
                 title="Instant Organization"
-                description="AI understands context, not just keywords. Your cooking videos go to Food, your coding tutorials to Tech—automatically, accurately, instantly."
+                description="AI understands context, not just keywords. Your cooking videos go to Cooking, your coding tutorials to Tech—automatically, accurately, instantly."
               />
               <FeatureCard
                 icon={<FolderTree className="h-6 w-6" />}
