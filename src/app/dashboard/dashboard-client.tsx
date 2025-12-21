@@ -166,6 +166,31 @@ export function DashboardClient({
     }
   };
 
+  const getEmptyStateMessage = React.useMemo(() => {
+    const hasSearchQuery = debouncedSearchQuery.trim().length > 0;
+    const hasNoVideos = categoryCounts.all === 0;
+
+    if (hasNoVideos) {
+      return {
+        title: 'No videos yet',
+        description:
+          'Click "Sync & Categorize" to fetch your liked videos from YouTube and automatically organize them.',
+      };
+    }
+
+    if (hasSearchQuery) {
+      return {
+        title: 'No videos found',
+        description: `No videos match "${debouncedSearchQuery}". Try a different search term or clear the search.`,
+      };
+    }
+
+    return {
+      title: 'No videos yet',
+      description: 'No videos match the selected filter.',
+    };
+  }, [debouncedSearchQuery, categoryCounts.all]);
+
   return (
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -355,17 +380,9 @@ export function DashboardClient({
             <div className="mb-4 rounded-full bg-muted p-4">
               <FolderOpen className="h-8 w-8 text-muted-foreground" />
             </div>
-            <h2 className="text-xl font-semibold">
-              {debouncedSearchQuery.trim()
-                ? 'No videos found'
-                : 'No videos yet'}
-            </h2>
+            <h2 className="text-xl font-semibold">{getEmptyStateMessage.title}</h2>
             <p className="mt-2 max-w-md text-muted-foreground">
-              {categoryCounts.all === 0
-                ? 'Click "Sync & Categorize" to fetch your liked videos from YouTube and automatically organize them.'
-                : debouncedSearchQuery.trim()
-                  ? `No videos match "${debouncedSearchQuery}". Try a different search term or clear the search.`
-                  : 'No videos match the selected filter.'}
+              {getEmptyStateMessage.description}
             </p>
           </div>
         )}
