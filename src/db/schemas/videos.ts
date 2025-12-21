@@ -21,14 +21,14 @@ import { createId, lifecycle_dates } from './helpers';
  * Uses 'simple' text search config for YouTube-style text (mixed languages, code words, brand names).
  *
  * @param title - Title column reference
- * @param description - Description column reference (nullable)
- * @param channelName - Channel name column reference (nullable)
+ * @param description - Description column reference (column may be nullable in the database)
+ * @param channelName - Channel name column reference (column may be nullable in the database)
  * @returns SQL expression for the search vector
  */
 export function createVideoSearchVector(
   title: AnyPgColumn,
-  description: AnyPgColumn | null,
-  channelName: AnyPgColumn | null
+  description: AnyPgColumn,
+  channelName: AnyPgColumn
 ): SQL {
   return sql`(
     setweight(to_tsvector('simple', COALESCE(${title}, '')), 'A') ||
