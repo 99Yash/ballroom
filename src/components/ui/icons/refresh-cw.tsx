@@ -9,11 +9,11 @@ export interface RefreshCCWIconWIcon {
   stopAnimation: () => void;
 }
 
-interface RefreshCCWIcoWIcon extends React.HTMLAttributes<HTMLDivElement> {
+interface RefreshCWIconProps extends React.HTMLAttributes<HTMLDivElement> {
   size?: number;
 }
 
-const RefreshCWIcon = React.forwardRef<RefreshCCWIconWIcon, RefreshCCWIcoWIcon>(
+const RefreshCWIcon = React.forwardRef<RefreshCCWIconWIcon, RefreshCWIconProps>(
   ({ onMouseEnter, onMouseLeave, className, size = 28, ...props }, ref) => {
     const controls = useAnimation();
     const isControlledRef = React.useRef(false);
