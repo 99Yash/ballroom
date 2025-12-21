@@ -1,4 +1,4 @@
-import { and, count, desc, eq, isNull, sql, type SQL } from 'drizzle-orm';
+import { and, desc, eq, isNull, sql, type SQL } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
 import { db } from '~/db';
 import { categories, createVideoSearchVector, videos } from '~/db/schemas';
@@ -23,9 +23,6 @@ export async function GET(request: Request) {
       baseConditions.push(eq(videos.categoryId, categoryId));
     }
 
-    // Use PostgreSQL full-text search with tsvector
-    // Weighted search: title (A), description (B), channel_name (C)
-    // Uses 'simple' config for YouTube-style text (mixed languages, code words, brand names)
     let searchExpr: SQL | null = null;
     let searchRank: SQL | null = null;
     if (searchQuery && searchQuery.length > 0) {
@@ -50,13 +47,7 @@ export async function GET(request: Request) {
     );
     const offset = (page - 1) * limit;
 
-    const [countResult] = await db
-      .select({ count: count() })
-      .from(videos)
-      .where(and(...baseConditions));
-
-    const totalCount = countResult?.count || 0;
-
+    // Use window function to get total count in the same query, avoiding duplicate full-text search
     const queryBuilder = db
       .select({
         id: videos.id,
@@ -68,6 +59,7 @@ export async function GET(request: Request) {
         publishedAt: videos.publishedAt,
         categoryId: videos.categoryId,
         categoryName: categories.name,
+        totalCount: sql<number>`COUNT(*) OVER()`.as('total_count'),
       })
       .from(videos)
       .leftJoin(categories, eq(videos.categoryId, categories.id))
@@ -79,7 +71,14 @@ export async function GET(request: Request) {
 
     const userVideos = await orderedQuery.limit(limit).offset(offset);
 
-    const serializedVideos = userVideos.map(serializeVideo);
+    const totalCount = userVideos[0]?.totalCount ?? 0;
+
+    // Remove totalCount from video objects before serialization (it's not part of Video type)
+    const serializedVideos = userVideos.map((video) => {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { totalCount: _, ...videoWithoutCount } = video;
+      return serializeVideo(videoWithoutCount);
+    });
 
     logger.api('GET', '/api/youtube/videos', {
       userId: session.user.id,
