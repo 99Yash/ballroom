@@ -377,7 +377,9 @@ export function DashboardClient({
             <div className="mb-4 rounded-full bg-muted p-4">
               <FolderOpen className="h-8 w-8 text-muted-foreground" />
             </div>
-            <h2 className="text-xl font-semibold">{getEmptyStateMessage.title}</h2>
+            <h2 className="text-xl font-semibold">
+              {getEmptyStateMessage.title}
+            </h2>
             <p className="mt-2 max-w-md text-muted-foreground">
               {getEmptyStateMessage.description}
             </p>

@@ -235,7 +235,10 @@ export interface CategorizeResult {
  * Categorize all uncategorized videos for a user
  * This is a reusable function that can be called from API routes or background jobs
  */
-export async function categorizeUserVideos(userId: string, force: boolean = false) {
+export async function categorizeUserVideos(
+  userId: string,
+  force: boolean = false
+) {
   // Get user's categories
   const userCategories = await db
     .select()
