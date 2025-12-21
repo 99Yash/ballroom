@@ -28,10 +28,6 @@ export const env = createEnv({
       .enum(['development', 'production', 'test'])
       .default('development'),
   },
-  client: {
-    // Better Auth base URL (optional - Better Auth auto-detects if not provided)
-    NEXT_PUBLIC_BETTER_AUTH_URL: z.string().url().optional(),
-  },
   // For Next.js 16+, we can use experimental__runtimeEnv for automatic handling
   experimental__runtimeEnv: process.env,
 });
