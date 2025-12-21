@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { siteConfig } from '~/lib/site';
 
 export default function AuthLayout(props: { children: React.ReactNode }) {
   return (
@@ -7,7 +8,7 @@ export default function AuthLayout(props: { children: React.ReactNode }) {
         {props.children}
       </main>
       <footer className="shrink-0 py-6 text-center text-xs text-muted-foreground">
-        By continuing, you agree to Ballroom&apos;s{' '}
+        By continuing, you agree to {siteConfig.name}&apos;s{' '}
         <Link
           href="/terms"
           className="underline transition-colors hover:text-foreground"
