@@ -168,6 +168,15 @@ export function DashboardClient({
     const hasSearchQuery = debouncedSearchQuery.trim().length > 0;
     const hasNoVideos = categoryCounts.all === 0;
 
+    // Prioritize search query - show search-specific message even if no videos exist
+    if (hasSearchQuery) {
+      return {
+        title: 'No videos found',
+        description: `No videos match "${debouncedSearchQuery}". Try a different search term or clear the search.`,
+      };
+    }
+
+    // If no videos at all and no search, show the helpful sync message
     if (hasNoVideos) {
       return {
         title: 'No videos yet',
@@ -176,13 +185,7 @@ export function DashboardClient({
       };
     }
 
-    if (hasSearchQuery) {
-      return {
-        title: 'No videos found',
-        description: `No videos match "${debouncedSearchQuery}". Try a different search term or clear the search.`,
-      };
-    }
-
+    // Videos exist but don't match the selected filter
     return {
       title: 'No videos yet',
       description: 'No videos match the selected filter.',
