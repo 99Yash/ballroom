@@ -1,7 +1,10 @@
-import { ArrowRight, Sparkles, Zap, FolderTree } from 'lucide-react';
+import { FolderTree } from 'lucide-react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { buttonVariants } from '~/components/ui/button';
+import { ArrowRightIcon } from '~/components/ui/icons/arrow-right';
+import { SparklesIcon } from '~/components/ui/icons/sparkles';
+import { ZapIcon } from '~/components/ui/icons/zap';
 import { getSession } from '~/lib/auth/session';
 import { siteConfig } from '~/lib/site';
 import { cn } from '~/lib/utils';
@@ -20,7 +23,7 @@ export default async function Home() {
         className="absolute inset-0 bg-gradient-to-br from-background via-background to-muted/20"
         aria-hidden="true"
       />
-      
+
       {/* Decorative elements */}
       <div
         className="absolute -top-40 -right-40 h-80 w-80 rounded-full bg-brand/5 blur-3xl"
@@ -46,8 +49,8 @@ export default async function Home() {
                   className="absolute -inset-1 rounded-2xl bg-gradient-to-r from-brand/20 via-brand/30 to-brand/20 opacity-0 blur transition-opacity duration-300 group-hover:opacity-100"
                   aria-hidden="true"
                 />
-                <div className="relative flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-brand to-brand/80 shadow-lg shadow-brand/20 transition-transform group-hover:scale-105">
-                  <Sparkles className="h-8 w-8 text-brand-foreground" />
+                <div className="relative flex h-16 w-16 items-center justify-center rounded-2xl bg-linear-to-br from-brand to-brand/80 shadow-lg shadow-brand/20 transition-transform group-hover:scale-105">
+                  <SparklesIcon size={32} className="text-brand-foreground" />
                 </div>
               </div>
             </div>
@@ -55,7 +58,7 @@ export default async function Home() {
             {/* Main Heading */}
             <div className="mb-16 text-center">
               <h1 className="heading-serif heading-xl mb-8 text-balance">
-                <span className="bg-gradient-to-br from-foreground via-foreground/95 to-foreground/80 bg-clip-text text-transparent">
+                <span className="bg-linear-to-br from-foreground via-foreground/95 to-foreground/80 bg-clip-text text-transparent">
                   {siteConfig.name}
                 </span>
               </h1>
@@ -63,13 +66,13 @@ export default async function Home() {
                 <span className="text-serif italic text-foreground/90">
                   Never lose a video again.
                 </span>{' '}
-                Find exactly what you're looking for in{' '}
+                Find exactly what you&apos;re looking for in{' '}
                 <span className="relative inline-block">
                   <span className="relative z-10 font-semibold text-foreground">
                     seconds, not hours
                   </span>
                   <span
-                    className="absolute -bottom-1 left-0 right-0 h-3 bg-gradient-to-r from-brand/20 via-brand/30 to-brand/20 blur-sm"
+                    className="absolute -bottom-1 left-0 right-0 h-3 bg-linear-to-r from-brand/20 via-brand/30 to-brand/20 blur-sm"
                     aria-hidden="true"
                   />
                 </span>
@@ -79,10 +82,11 @@ export default async function Home() {
             {/* Description */}
             <div className="mb-20 text-center">
               <p className="mx-auto max-w-2xl text-pretty text-lg leading-relaxed text-muted-foreground sm:text-xl">
-                You've liked hundreds—maybe thousands—of videos. That perfect
-                tutorial, that song you loved, that recipe you wanted to try.{' '}
+                You&apos;ve liked hundreds—maybe thousands—of videos. That
+                perfect tutorial, that song you loved, that recipe you wanted to
+                try.{' '}
                 <span className="font-medium text-foreground">
-                  They're all buried in your likes, lost forever.
+                  They&apos;re all buried in your likes, lost forever.
                 </span>{' '}
                 Until now. Ballroom uses AI to organize your YouTube likes into
                 smart categories, so you can find what matters in an instant.
@@ -95,15 +99,15 @@ export default async function Home() {
                 href="/signin"
                 className={cn(
                   buttonVariants({ size: 'lg' }),
-                  'group relative overflow-hidden bg-brand px-10 py-6 text-lg font-semibold tracking-tight text-brand-foreground shadow-lg shadow-brand/20 transition-all duration-300 hover:scale-105 hover:bg-brand/90 hover:shadow-xl hover:shadow-brand/30'
+                  'group relative overflow-hidden bg-linear-to-br from-brand to-brand/80 px-10 py-6 text-lg font-semibold tracking-tight text-brand-foreground shadow-lg shadow-brand/20 transition-all duration-300 hover:scale-105 hover:bg-brand/90 hover:shadow-xl hover:shadow-brand/30'
                 )}
               >
                 <span className="relative z-10 flex items-center gap-2">
                   Organize My Videos
-                  <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
+                  <ArrowRightIcon size={20} />
                 </span>
                 <span
-                  className="absolute inset-0 -z-0 bg-gradient-to-r from-transparent via-white/10 to-transparent translate-x-[-200%] group-hover:translate-x-[200%] transition-transform duration-1000"
+                  className="absolute inset-0 z-0 bg-linear-to-r from-transparent via-white/10 to-transparent translate-x-[-200%] group-hover:translate-x-[200%] transition-transform duration-1000"
                   aria-hidden="true"
                 />
               </Link>
@@ -115,7 +119,7 @@ export default async function Home() {
             {/* Features Grid */}
             <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
               <FeatureCard
-                icon={<Zap className="h-6 w-6" />}
+                icon={<ZapIcon size={24} />}
                 title="Instant Organization"
                 description="AI understands context, not just keywords. Your cooking videos go to Cooking, your coding tutorials to Tech—automatically, accurately, instantly."
               />
@@ -125,7 +129,7 @@ export default async function Home() {
                 description="Create categories that make sense to you. Music, Fitness, Design, whatever you need. AI learns your preferences and organizes accordingly."
               />
               <FeatureCard
-                icon={<Sparkles className="h-6 w-6" />}
+                icon={<SparklesIcon size={24} />}
                 title="Set It and Forget It"
                 description="One sync, endless organization. New likes automatically find their place. No manual work, no maintenance—just results."
                 className="sm:col-span-2 lg:col-span-1"
@@ -187,7 +191,7 @@ function FeatureCard({
         className="absolute inset-0 bg-gradient-to-br from-brand/0 via-brand/0 to-brand/5 opacity-0 transition-opacity duration-300 group-hover:opacity-100"
         aria-hidden="true"
       />
-      
+
       <div className="relative z-10">
         <div
           className="mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-brand/10 text-brand transition-all duration-300 group-hover:scale-110 group-hover:bg-brand/15"

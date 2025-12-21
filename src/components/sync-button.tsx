@@ -1,14 +1,7 @@
 'use client';
 
 import { formatDistanceToNow } from 'date-fns';
-import {
-  ChevronDown,
-  Clock,
-  FastForward,
-  RefreshCw,
-  RotateCcw,
-  Sparkles,
-} from 'lucide-react';
+import { ChevronDown, Clock, FastForward, RotateCcw } from 'lucide-react';
 import * as React from 'react';
 import { toast } from 'sonner';
 import { Button } from '~/components/ui/button';
@@ -18,6 +11,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '~/components/ui/dropdown-menu';
+import { RefreshCWIcon } from '~/components/ui/icons/refresh-cw';
+import { SparklesIcon } from '~/components/ui/icons/sparkles';
 import { Spinner } from '~/components/ui/spinner';
 
 interface SyncButtonProps {
@@ -171,7 +166,7 @@ export function SyncButton({
               {isSyncing ? (
                 <Spinner className="h-4 w-4" />
               ) : (
-                <RefreshCw className="h-4 w-4" />
+                <RefreshCWIcon size={16} />
               )}
               Sync & Categorize
             </Button>
@@ -189,7 +184,7 @@ export function SyncButton({
                   onClick={handleQuickSync}
                   disabled={isLoading}
                 >
-                  <RefreshCw className="mr-2 h-4 w-4" />
+                  <RefreshCWIcon size={16} className="mr-2" />
                   <div>
                     <div className="font-medium">Quick Sync</div>
                     <div className="text-xs text-muted-foreground">
@@ -230,7 +225,7 @@ export function SyncButton({
             {isSyncing ? (
               <Spinner className="h-4 w-4" />
             ) : (
-              <RefreshCw className="h-4 w-4" />
+              <RefreshCWIcon size={16} />
             )}
             Sync & Categorize
           </Button>
@@ -245,7 +240,7 @@ export function SyncButton({
           {isCategorizing ? (
             <Spinner className="h-4 w-4" />
           ) : (
-            <Sparkles className="h-4 w-4" />
+            <SparklesIcon size={16} />
           )}
           Re-categorize
         </Button>
