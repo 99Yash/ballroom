@@ -1,4 +1,4 @@
-import { and, count, desc, eq, isNull } from 'drizzle-orm';
+import { and, count, desc, eq, ilike, isNull, or } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
 import { db } from '~/db';
 import { categories, videos } from '~/db/schemas';
@@ -14,12 +14,26 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const categoryId = searchParams.get('categoryId');
     const uncategorized = searchParams.get('uncategorized') === 'true';
+    const searchQuery = searchParams.get('search')?.trim();
     const baseConditions = [eq(videos.userId, session.user.id)];
 
     if (uncategorized) {
       baseConditions.push(isNull(videos.categoryId));
     } else if (categoryId) {
       baseConditions.push(eq(videos.categoryId, categoryId));
+    }
+
+    // Add search conditions if search query is provided
+    if (searchQuery) {
+      const searchPattern = `%${searchQuery}%`;
+      // title is notNull, so at least one condition will always be valid
+      baseConditions.push(
+        or(
+          ilike(videos.title, searchPattern),
+          ilike(videos.description, searchPattern),
+          ilike(videos.channelName, searchPattern)
+        )
+      );
     }
 
     const page = parseInt(searchParams.get('page') || '1', 10);

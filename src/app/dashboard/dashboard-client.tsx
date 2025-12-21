@@ -1,12 +1,13 @@
 'use client';
 
-import { FolderOpen, LogOut, Youtube } from 'lucide-react';
+import { FolderOpen, LogOut, Search, X, Youtube } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import * as React from 'react';
 import { toast } from 'sonner';
 import { CategoryManager } from '~/components/category-manager';
 import { SyncButton } from '~/components/sync-button';
 import { Button } from '~/components/ui/button';
+import { Input } from '~/components/ui/input';
 import {
   Pagination,
   PaginationContent,
@@ -18,6 +19,7 @@ import {
 import { VideoCard } from '~/components/video-card';
 import { authClient } from '~/lib/auth/client';
 import { siteConfig } from '~/lib/site';
+import { cn } from '~/lib/utils';
 import type { SerializedVideo } from '~/types/video';
 
 interface Category {
@@ -42,10 +44,26 @@ export function DashboardClient({
   const [selectedCategory, setSelectedCategory] = React.useState<string | null>(
     null
   );
+  const [searchQuery, setSearchQuery] = React.useState('');
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = React.useState('');
   const [currentPage, setCurrentPage] = React.useState(1);
   const [totalPages, setTotalPages] = React.useState(0);
   const [isLoading, setIsLoading] = React.useState(true);
   const limit = 24;
+
+  // Debounce search query
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // Reset to page 1 when search or category changes
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [debouncedSearchQuery, selectedCategory]);
 
   const fetchVideos = React.useCallback(async () => {
     setIsLoading(true);
@@ -59,6 +77,10 @@ export function DashboardClient({
         params.set('uncategorized', 'true');
       } else if (selectedCategory) {
         params.set('categoryId', selectedCategory);
+      }
+
+      if (debouncedSearchQuery.trim()) {
+        params.set('search', debouncedSearchQuery.trim());
       }
 
       const response = await fetch(`/api/youtube/videos?${params}`);
@@ -75,7 +97,7 @@ export function DashboardClient({
     } finally {
       setIsLoading(false);
     }
-  }, [currentPage, selectedCategory, limit]);
+  }, [currentPage, selectedCategory, debouncedSearchQuery, limit]);
 
   React.useEffect(() => {
     fetchVideos();
@@ -180,6 +202,29 @@ export function DashboardClient({
             onCategoryDeleted={handleCategoryDeleted}
             onCategoriesChanged={handleRefresh}
           />
+        </div>
+
+        {/* Search Input */}
+        <div className="mb-6">
+          <div className="relative max-w-md">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              type="search"
+              placeholder="Search videos by title, description, or channel..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10 pr-10"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                aria-label="Clear search"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="mb-6 flex flex-wrap gap-2">
@@ -307,11 +352,17 @@ export function DashboardClient({
             <div className="mb-4 rounded-full bg-muted p-4">
               <FolderOpen className="h-8 w-8 text-muted-foreground" />
             </div>
-            <h2 className="text-xl font-semibold">No videos yet</h2>
+            <h2 className="text-xl font-semibold">
+              {debouncedSearchQuery.trim()
+                ? 'No videos found'
+                : 'No videos yet'}
+            </h2>
             <p className="mt-2 max-w-md text-muted-foreground">
               {categoryCounts.all === 0
                 ? 'Click "Sync & Categorize" to fetch your liked videos from YouTube and automatically organize them.'
-                : 'No videos match the selected filter.'}
+                : debouncedSearchQuery.trim()
+                  ? `No videos match "${debouncedSearchQuery}". Try a different search term or clear the search.`
+                  : 'No videos match the selected filter.'}
             </p>
           </div>
         )}
