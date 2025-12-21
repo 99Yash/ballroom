@@ -55,7 +55,7 @@ class Logger {
   }
 
   error(message: string, error?: Error | unknown, context?: LogContext) {
-    const errorContext: LogContext = {
+    const errorContext = {
       ...context,
       error:
         error instanceof Error

@@ -26,7 +26,7 @@ const rateLimitLocks = new Map<string, Promise<void>>();
  * Atomically check and update rate limit for a user.
  * Uses a per-user lock to prevent concurrent requests from bypassing rate limits.
  */
-async function checkRateLimit(userId: string): Promise<boolean> {
+async function checkRateLimit(userId: string) {
   // Wait for any pending rate limit check for this user
   const existingLock = rateLimitLocks.get(userId);
   if (existingLock) {

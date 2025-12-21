@@ -35,7 +35,7 @@ async function retryWithBackoff<T>(
     maxDelayMs?: number;
     backoffMultiplier?: number;
   } = {}
-): Promise<T> {
+) {
   const {
     maxRetries = 3,
     initialDelayMs = 1000,
@@ -102,11 +102,7 @@ async function retryWithBackoff<T>(
 /**
  * Validate that a category name is a legitimate, meaningful category
  */
-export async function validateCategoryName(name: string): Promise<{
-  valid: boolean;
-  reason?: string;
-  suggestion?: string;
-}> {
+export async function validateCategoryName(name: string) {
   const result = await retryWithBackoff(
     () =>
       generateObject({
@@ -146,7 +142,7 @@ Return whether it's valid, and if not, explain why and suggest an alternative if
 export async function categorizeVideos(
   videos: VideoForCategorization[],
   categories: Category[]
-): Promise<CategorizationResult[]> {
+) {
   if (videos.length === 0 || categories.length === 0) {
     return [];
   }
@@ -219,7 +215,7 @@ export async function categorizeVideosInBatches(
   videosToProcess: VideoForCategorization[],
   categoriesToUse: Category[],
   batchSize: number = 10
-): Promise<CategorizationResult[]> {
+) {
   const results: CategorizationResult[] = [];
 
   for (let i = 0; i < videosToProcess.length; i += batchSize) {
@@ -244,10 +240,7 @@ export interface CategorizeResult {
  * Categorize all uncategorized videos for a user
  * This is a reusable function that can be called from API routes or background jobs
  */
-export async function categorizeUserVideos(
-  userId: string,
-  force: boolean = false
-): Promise<CategorizeResult> {
+export async function categorizeUserVideos(userId: string, force: boolean = false) {
   // Get user's categories
   const userCategories = await db
     .select()
