@@ -13,10 +13,6 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-// ============================================================================
-// Generic Serialization Utilities
-// ============================================================================
-
 /**
  * Type-level transformation: converts Date types to string recursively.
  * Handles nullability, optionality, arrays, and nested objects.

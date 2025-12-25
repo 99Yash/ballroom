@@ -259,7 +259,6 @@ export async function categorizeUserVideos(
   let videosToAnalyze: DatabaseVideo[] = [];
 
   if (force) {
-    // Force mode: re-analyze ALL videos (use with caution)
     videosToAnalyze = await db
       .select()
       .from(videos)

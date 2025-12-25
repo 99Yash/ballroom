@@ -11,7 +11,6 @@ export async function GET() {
   try {
     const session = await requireSession();
 
-    // Get the most recently created video to determine last sync time
     const [latestVideo] = await db
       .select({ createdAt: videos.createdAt })
       .from(videos)
@@ -19,7 +18,6 @@ export async function GET() {
       .orderBy(desc(videos.createdAt))
       .limit(1);
 
-    // Get total video count efficiently using COUNT aggregate
     const [countResult] = await db
       .select({ count: count() })
       .from(videos)

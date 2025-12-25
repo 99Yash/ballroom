@@ -6,7 +6,6 @@ import { createValidationError } from '~/lib/utils';
  * Centralize all API input validation for consistency
  */
 
-// Category schemas
 export const createCategorySchema = z.object({
   name: z
     .string()
@@ -24,7 +23,6 @@ export const updateCategorySchema = z.object({
     .trim(),
 });
 
-// Video sync schemas
 export const syncVideosSchema = z.object({
   limit: z
     .number()
@@ -35,12 +33,10 @@ export const syncVideosSchema = z.object({
     .default(100),
 });
 
-// Categorization schemas
 export const categorizeVideosSchema = z.object({
   force: z.boolean().optional().default(false),
 });
 
-// Onboarding schemas
 export const completeOnboardingSchema = z.object({
   categories: z
     .array(

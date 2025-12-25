@@ -33,7 +33,6 @@ export async function DELETE(
       });
     }
 
-    // Videos with this category will have categoryId set to null (onDelete: 'set null')
     await db.delete(categories).where(eq(categories.id, id));
 
     logger.api('DELETE', `/api/categories/${id}`, {

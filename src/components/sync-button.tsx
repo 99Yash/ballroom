@@ -44,7 +44,7 @@ export function SyncButton({
         setSyncStatus(data);
       }
     } catch {
-      // Silently fail - sync status is optional
+      // Sync status is optional, so we silently fail
     }
   }, []);
 

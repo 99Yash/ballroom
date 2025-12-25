@@ -76,7 +76,6 @@ export async function POST(request: Request) {
       await initialSyncTask.trigger({ userId: session.user.id });
       logger.info('Triggered initial sync task', { userId: session.user.id });
     } catch (triggerError) {
-      // Don't fail onboarding if trigger fails - user can manually sync
       logger.error('Failed to trigger initial sync task', triggerError, {
         userId: session.user.id,
       });

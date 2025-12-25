@@ -120,7 +120,7 @@ export function DashboardClient({
 
       setCategoryCounts(counts);
     } catch {
-      // Silently fail - category counts are not critical
+      // Category counts are not critical, so we silently fail
     }
   }, []);
 
