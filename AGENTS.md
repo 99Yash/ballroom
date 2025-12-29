@@ -225,7 +225,7 @@ const serializedVideos = videos.map((v) => serializeVideo(v));
 
 ### Database queries
 
-Use Drizzle ORM with no unbounded queries:
+Use Drizzle ORM with no unbounded queries, Prevent N+1 queries: Always use eager loading, batch queries, or WITH queries when fetching related data. Use Drizzle's with method for joins and avoid iterative database calls in loops
 
 ### AI categorization
 
