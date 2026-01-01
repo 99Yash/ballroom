@@ -302,7 +302,6 @@ export function DashboardClient({
                   exit={{ opacity: 0, scale: 0.8 }}
                   onClick={() => {
                     setSearchQuery('');
-                    setCurrentPage(1);
                   }}
                   className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-1.5 text-muted-foreground/60 transition-all duration-200 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   aria-label="Clear search"
