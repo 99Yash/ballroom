@@ -4,7 +4,7 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
 import { useRouter } from 'next/navigation';
 import { Drawer } from 'vaul';
-import { useMediaQuery } from '~/hooks/use-media-query';
+import { useIsMobile } from '~/hooks/use-mobile';
 import { cn } from '~/lib/utils';
 import {
   DialogContent,
@@ -53,7 +53,7 @@ export function Modal({
       router.back();
     }
   };
-  const isMobile = useMediaQuery('(max-width: 780px)');
+  const isMobile = useIsMobile();
 
   if (isMobile && !desktopOnly) {
     return (
