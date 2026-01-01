@@ -1,9 +1,8 @@
 import { eq } from 'drizzle-orm';
 import { redirect } from 'next/navigation';
 import { db } from '~/db';
-import { categories, user } from '~/db/schemas';
+import { categories, categorySelect, user } from '~/db/schemas';
 import { getSession } from '~/lib/auth/session';
-import type { Category } from '~/types/category';
 import { DashboardClient } from './dashboard-client';
 
 export default async function DashboardPage() {
@@ -23,19 +22,14 @@ export default async function DashboardPage() {
   }
 
   const userCategories = await db
-    .select({
-      id: categories.id,
-      name: categories.name,
-      isDefault: categories.isDefault,
-      parentCategoryId: categories.parentCategoryId,
-    })
+    .select(categorySelect)
     .from(categories)
     .where(eq(categories.userId, session.user.id))
     .orderBy(categories.createdAt);
 
   return (
     <DashboardClient
-      initialCategories={userCategories as Category[]}
+      initialCategories={userCategories}
       userName={session.user.name ?? session.user.email}
     />
   );

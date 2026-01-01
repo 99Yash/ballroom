@@ -1,4 +1,4 @@
-import { DatabaseCategory } from '~/db/schemas';
+import type { DatabaseCategory } from '~/db/schemas';
 
 /**
  * Client-safe category type (excludes userId and date fields)

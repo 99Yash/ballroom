@@ -119,3 +119,16 @@ export type NewVideo = typeof videos.$inferInsert;
 
 export type DatabaseCategory = typeof categories.$inferSelect;
 export type NewCategory = typeof categories.$inferInsert;
+
+/**
+ * Reusable select object for Category queries.
+ * Matches the client-safe Category type (excludes userId and date fields).
+ * Drizzle will automatically infer the correct type from this select object,
+ * eliminating the need for type assertions.
+ */
+export const categorySelect = {
+  id: categories.id,
+  name: categories.name,
+  isDefault: categories.isDefault,
+  parentCategoryId: categories.parentCategoryId,
+} as const;

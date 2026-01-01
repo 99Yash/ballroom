@@ -1,11 +1,10 @@
 import { and, eq } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
 import { db } from '~/db';
-import { categories } from '~/db/schemas';
+import { categories, categorySelect } from '~/db/schemas';
 import { requireSession } from '~/lib/auth/session';
 import { AppError, createErrorResponse } from '~/lib/errors';
 import { logger } from '~/lib/logger';
-import type { Category } from '~/types/category';
 import {
   updateCategorySchema,
   validateRequestBody,
@@ -111,12 +110,7 @@ export async function PATCH(
       .update(categories)
       .set({ name: trimmedName })
       .where(and(eq(categories.id, id), eq(categories.userId, session.user.id)))
-      .returning({
-        id: categories.id,
-        name: categories.name,
-        isDefault: categories.isDefault,
-        parentCategoryId: categories.parentCategoryId,
-      });
+      .returning(categorySelect);
 
     logger.api('PATCH', `/api/categories/${id}`, {
       userId: session.user.id,
@@ -124,7 +118,7 @@ export async function PATCH(
       status: 200,
     });
 
-    return NextResponse.json({ category: updated as Category });
+    return NextResponse.json({ category: updated });
   } catch (error) {
     const errorResponse = createErrorResponse(error);
     logger.api('PATCH', `/api/categories/${id}`, {

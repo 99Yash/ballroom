@@ -1,12 +1,15 @@
 import { eq } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
 import { db } from '~/db';
-import { categories, DEFAULT_CATEGORIES } from '~/db/schemas';
+import {
+  categories,
+  categorySelect,
+  DEFAULT_CATEGORIES,
+} from '~/db/schemas';
 import { validateCategoryName } from '~/lib/ai/categorize';
 import { requireSession } from '~/lib/auth/session';
 import { AppError, createErrorResponse } from '~/lib/errors';
 import { logger } from '~/lib/logger';
-import type { Category } from '~/types/category';
 import {
   createCategorySchema,
   validateRequestBody,
@@ -18,12 +21,7 @@ export async function GET() {
     const session = await requireSession();
 
     const userCategories = await db
-      .select({
-        id: categories.id,
-        name: categories.name,
-        isDefault: categories.isDefault,
-        parentCategoryId: categories.parentCategoryId,
-      })
+      .select(categorySelect)
       .from(categories)
       .where(eq(categories.userId, session.user.id))
       .orderBy(categories.createdAt);
@@ -34,7 +32,7 @@ export async function GET() {
       status: 200,
     });
 
-    return NextResponse.json({ categories: userCategories as Category[] });
+    return NextResponse.json({ categories: userCategories });
   } catch (error) {
     const errorResponse = createErrorResponse(error);
     logger.api('GET', '/api/categories', {
@@ -100,12 +98,7 @@ export async function POST(request: Request) {
         name: trimmedName,
         isDefault: false,
       })
-      .returning({
-        id: categories.id,
-        name: categories.name,
-        isDefault: categories.isDefault,
-        parentCategoryId: categories.parentCategoryId,
-      });
+      .returning(categorySelect);
 
     logger.api('POST', '/api/categories', {
       userId: session.user.id,
@@ -113,7 +106,7 @@ export async function POST(request: Request) {
       status: 200,
     });
 
-    return NextResponse.json({ category: newCategory as Category });
+    return NextResponse.json({ category: newCategory });
   } catch (error) {
     const errorResponse = createErrorResponse(error);
     logger.api('POST', '/api/categories', {
@@ -130,7 +123,7 @@ export async function POST(request: Request) {
 
 export async function initializeDefaultCategories(userId: string) {
   const existing = await db
-    .select()
+    .select({ id: categories.id })
     .from(categories)
     .where(eq(categories.userId, userId))
     .limit(1);
