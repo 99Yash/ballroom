@@ -1,21 +1,23 @@
 'use client';
 
-import { FolderOpen, LogOut, Search, X, Youtube } from 'lucide-react';
+import {
+  ChevronLeft,
+  ChevronRight,
+  FolderOpen,
+  LogOut,
+  Search,
+  X,
+  Youtube,
+} from 'lucide-react';
+import { AnimatePresence, motion } from 'motion/react';
 import { useRouter } from 'next/navigation';
+import { parseAsInteger, useQueryState } from 'nuqs';
 import * as React from 'react';
 import { toast } from 'sonner';
 import { CategoryManager } from '~/components/category-manager';
 import { SyncButton } from '~/components/sync-button';
 import { Button } from '~/components/ui/button';
 import { Input } from '~/components/ui/input';
-import {
-  Pagination,
-  PaginationContent,
-  PaginationItem,
-  PaginationLink,
-  PaginationNext,
-  PaginationPrevious,
-} from '~/components/ui/pagination';
 import { VideoCard } from '~/components/video-card';
 import { authClient } from '~/lib/auth/client';
 import { siteConfig } from '~/lib/site';
@@ -26,6 +28,11 @@ interface DashboardClientProps {
   initialCategories: Category[];
   userName: string;
 }
+
+const pageParser = parseAsInteger.withDefault(1).withOptions({
+  history: 'push',
+  shallow: false,
+});
 
 export function DashboardClient({
   initialCategories,
@@ -40,28 +47,32 @@ export function DashboardClient({
   );
   const [searchQuery, setSearchQuery] = React.useState('');
   const [debouncedSearchQuery, setDebouncedSearchQuery] = React.useState('');
-  const [currentPage, setCurrentPage] = React.useState(1);
+  const [currentPage, setCurrentPage] = useQueryState('page', pageParser);
   const [totalPages, setTotalPages] = React.useState(0);
   const [isLoading, setIsLoading] = React.useState(true);
   const limit = 24;
 
+  const prevSearchQueryRef = React.useRef(searchQuery);
+
   React.useEffect(() => {
     const timer = setTimeout(() => {
+      const hasChanged = prevSearchQueryRef.current !== searchQuery;
+      prevSearchQueryRef.current = searchQuery;
       setDebouncedSearchQuery(searchQuery);
+      if (hasChanged) {
+        setCurrentPage(1);
+      }
     }, 300);
 
     return () => clearTimeout(timer);
-  }, [searchQuery]);
-
-  React.useEffect(() => {
-    setCurrentPage(1);
-  }, [debouncedSearchQuery, selectedCategory]);
+  }, [searchQuery, setCurrentPage]);
 
   const fetchVideos = React.useCallback(async () => {
     setIsLoading(true);
     try {
+      const page = Math.max(1, currentPage);
       const params = new URLSearchParams({
-        page: currentPage.toString(),
+        page: page.toString(),
         limit: limit.toString(),
       });
 
@@ -81,15 +92,26 @@ export function DashboardClient({
       }
 
       const data = await response.json();
+      const newTotalPages = data.pagination?.totalPages || 0;
       setVideos(data.videos || []);
-      setTotalPages(data.pagination?.totalPages || 0);
+      setTotalPages(newTotalPages);
+
+      if (newTotalPages > 0 && page > newTotalPages) {
+        setCurrentPage(1);
+      }
     } catch {
       toast.error('Failed to fetch videos');
       setVideos([]);
     } finally {
       setIsLoading(false);
     }
-  }, [currentPage, selectedCategory, debouncedSearchQuery, limit]);
+  }, [
+    currentPage,
+    selectedCategory,
+    debouncedSearchQuery,
+    limit,
+    setCurrentPage,
+  ]);
 
   React.useEffect(() => {
     fetchVideos();
@@ -123,21 +145,19 @@ export function DashboardClient({
     fetchCategoryCounts();
   }, [fetchCategoryCounts]);
 
-  const pageNumbers = React.useMemo(
-    () => Array.from({ length: totalPages }, (_, i) => i + 1),
-    [totalPages]
-  );
-
   const handleRefresh = () => {
     fetchVideos();
     fetchCategoryCounts();
     router.refresh();
   };
 
-  const handleCategoryChange = (categoryId: string | null) => {
-    setSelectedCategory(categoryId);
-    setCurrentPage(1);
-  };
+  const handleCategoryChange = React.useCallback(
+    (categoryId: string | null) => {
+      setSelectedCategory(categoryId);
+      setCurrentPage(1);
+    },
+    [setCurrentPage]
+  );
 
   const handleSignOut = async () => {
     await authClient.signOut();
@@ -189,31 +209,55 @@ export function DashboardClient({
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/60">
-        <div className="container mx-auto flex h-16 items-center justify-between px-4">
-          <div className="flex min-w-0 items-center gap-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-red-600">
+      <header className="sticky top-0 z-40 border-b border-border/40 bg-background/80 backdrop-blur-xl supports-backdrop-filter:bg-background/60">
+        <div className="container mx-auto flex h-16 items-center justify-between px-4 sm:px-6">
+          <motion.div
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.3 }}
+            className="flex min-w-0 items-center gap-3"
+          >
+            <motion.div
+              whileHover={{ scale: 1.05, rotate: 5 }}
+              whileTap={{ scale: 0.95 }}
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-red-600 to-red-700 shadow-lg shadow-red-600/20"
+            >
               <Youtube className="h-5 w-5 text-white" />
-            </div>
+            </motion.div>
             <div className="min-w-0 flex-1">
-              <h1 className="truncate text-lg font-semibold">
+              <h1 className="truncate text-lg font-semibold tracking-tight">
                 {siteConfig.name}
               </h1>
-              <p className="truncate text-xs text-muted-foreground">
+              <p className="truncate text-xs text-muted-foreground/80">
                 Welcome, {userName}
               </p>
             </div>
-          </div>
+          </motion.div>
 
-          <Button variant="ghost" onClick={handleSignOut} className="gap-2">
-            <LogOut className="h-4 w-4" />
-            Sign out
-          </Button>
+          <motion.div
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.3 }}
+          >
+            <Button
+              variant="ghost"
+              onClick={handleSignOut}
+              className="gap-2 transition-colors hover:bg-muted/50"
+            >
+              <LogOut className="h-4 w-4" />
+              <span className="hidden sm:inline">Sign out</span>
+            </Button>
+          </motion.div>
         </div>
       </header>
 
-      <main className="container mx-auto px-4 py-8">
-        <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <main className="container mx-auto px-4 py-8 sm:px-6">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.1 }}
+          className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
+        >
           <SyncButton
             onSyncComplete={handleRefresh}
             onCategorizeComplete={handleRefresh}
@@ -224,62 +268,92 @@ export function DashboardClient({
             onCategoryDeleted={handleCategoryDeleted}
             onCategoriesChanged={handleRefresh}
           />
-        </div>
+        </motion.div>
 
-        <div className="mb-6">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.2 }}
+          className="mb-8"
+        >
           <div className="relative max-w-md">
             <Search
-              className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+              className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/60 transition-colors duration-200 peer-focus-within:text-muted-foreground"
               aria-hidden="true"
             />
             <Input
               type="search"
               placeholder="Search videos by title, description, or channel..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 pr-10"
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                if (!e.target.value) {
+                  setCurrentPage(1);
+                }
+              }}
+              className="peer h-11 rounded-xl border-border/50 bg-background pl-11 pr-11 text-sm shadow-sm transition-all duration-200 focus:border-ring focus:bg-background focus:shadow-md"
               aria-label="Search videos by title, description, or channel"
             />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                aria-label="Clear search"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            )}
+            <AnimatePresence>
+              {searchQuery && (
+                <motion.button
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.8 }}
+                  onClick={() => {
+                    setSearchQuery('');
+                    setCurrentPage(1);
+                  }}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-1.5 text-muted-foreground/60 transition-all duration-200 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  aria-label="Clear search"
+                >
+                  <X className="h-4 w-4" />
+                </motion.button>
+              )}
+            </AnimatePresence>
           </div>
-        </div>
+        </motion.div>
 
-        <div className="mb-6 flex flex-wrap gap-2">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.3 }}
+          className="mb-8 flex flex-wrap gap-2"
+        >
           <Button
             variant={selectedCategory === null ? 'default' : 'outline'}
             size="sm"
             onClick={() => handleCategoryChange(null)}
             disabled={isLoading}
-            className="whitespace-nowrap"
+            className="h-9 whitespace-nowrap rounded-lg border-border/50 px-4 text-sm font-medium shadow-sm transition-all duration-200 hover:shadow-md disabled:opacity-50 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md"
           >
             All ({categoryCounts.all || 0})
           </Button>
-          {categories.map((category) => {
+          {categories.map((category, index) => {
             const count = categoryCounts[category.id] || 0;
+            const isActive = selectedCategory === category.id;
             return (
-              <Button
+              <motion.div
                 key={category.id}
-                variant={
-                  selectedCategory === category.id ? 'default' : 'outline'
-                }
-                size="sm"
-                onClick={() => handleCategoryChange(category.id)}
-                disabled={isLoading}
-                className="whitespace-nowrap"
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.2, delay: 0.3 + index * 0.03 }}
               >
-                <span className="truncate max-w-[120px] sm:max-w-none">
-                  {category.name}
-                </span>
-                <span className="ml-1">({count})</span>
-              </Button>
+                <Button
+                  variant={isActive ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => handleCategoryChange(category.id)}
+                  disabled={isLoading}
+                  className="h-9 whitespace-nowrap rounded-lg border-border/50 px-4 text-sm font-medium shadow-sm transition-all duration-200 hover:shadow-md disabled:opacity-50 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md"
+                >
+                  <span className="truncate max-w-[120px] sm:max-w-none">
+                    {category.name}
+                  </span>
+                  <span className="ml-1.5 font-normal opacity-80">
+                    ({count})
+                  </span>
+                </Button>
+              </motion.div>
             );
           })}
           {categoryCounts.uncategorized > 0 && (
@@ -289,110 +363,156 @@ export function DashboardClient({
               }
               size="sm"
               onClick={() => handleCategoryChange('uncategorized')}
-              className="border-dashed whitespace-nowrap"
+              className="h-9 border-dashed whitespace-nowrap rounded-lg border-border/50 px-4 text-sm font-medium shadow-sm transition-all duration-200 hover:shadow-md disabled:opacity-50 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md"
               disabled={isLoading}
             >
               <span className="truncate max-w-[100px] sm:max-w-none">
                 Uncategorized
               </span>
-              <span className="ml-1">({categoryCounts.uncategorized})</span>
+              <span className="ml-1.5 font-normal opacity-80">
+                ({categoryCounts.uncategorized})
+              </span>
             </Button>
           )}
-        </div>
+        </motion.div>
 
-        {isLoading ? (
-          <div className="flex flex-col items-center justify-center py-20 text-center">
-            <div className="mb-4 h-8 w-8 animate-spin rounded-full border-4 border-muted border-t-primary" />
-            <p className="text-muted-foreground">Loading videos...</p>
-          </div>
-        ) : videos.length > 0 ? (
-          <>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {videos.map((video, index) => (
-                <VideoCard key={video.id} video={video} priority={index < 6} />
-              ))}
-            </div>
-
-            {totalPages > 1 && (
-              <div className="mt-8 flex items-center justify-center">
-                <Pagination>
-                  <PaginationContent>
-                    <PaginationItem>
-                      <PaginationPrevious
-                        onClick={() =>
-                          setCurrentPage((p) => Math.max(1, p - 1))
-                        }
-                        className={
-                          currentPage === 1
-                            ? 'pointer-events-none opacity-50'
-                            : 'cursor-pointer'
-                        }
-                      />
-                    </PaginationItem>
-
-                    {pageNumbers.map((page) => {
-                      const showPage =
-                        page === 1 ||
-                        page === totalPages ||
-                        (page >= currentPage - 1 && page <= currentPage + 1);
-
-                      if (!showPage) {
-                        if (
-                          page === currentPage - 2 ||
-                          page === currentPage + 2
-                        ) {
-                          return (
-                            <PaginationItem key={page}>
-                              <span className="px-2">...</span>
-                            </PaginationItem>
-                          );
-                        }
-                        return null;
-                      }
-
-                      return (
-                        <PaginationItem key={page}>
-                          <PaginationLink
-                            onClick={() => setCurrentPage(page)}
-                            isActive={currentPage === page}
-                            className="cursor-pointer"
-                          >
-                            {page}
-                          </PaginationLink>
-                        </PaginationItem>
-                      );
-                    })}
-
-                    <PaginationItem>
-                      <PaginationNext
-                        onClick={() =>
-                          setCurrentPage((p) => Math.min(totalPages, p + 1))
-                        }
-                        className={
-                          currentPage === totalPages
-                            ? 'pointer-events-none opacity-50'
-                            : 'cursor-pointer'
-                        }
-                      />
-                    </PaginationItem>
-                  </PaginationContent>
-                </Pagination>
+        <AnimatePresence mode="wait">
+          {isLoading ? (
+            <motion.div
+              key="loading"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="flex flex-col items-center justify-center py-24 text-center"
+            >
+              <div className="mb-6 h-10 w-10 animate-spin rounded-full border-4 border-muted border-t-primary" />
+              <p className="text-sm font-medium text-muted-foreground">
+                Loading videos...
+              </p>
+            </motion.div>
+          ) : videos.length > 0 ? (
+            <motion.div
+              key="videos"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.3 }}
+            >
+              <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                {videos.map((video, index) => (
+                  <motion.div
+                    key={video.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{
+                      duration: 0.4,
+                      delay: index * 0.03,
+                      ease: [0.4, 0, 0.2, 1],
+                    }}
+                  >
+                    <VideoCard video={video} priority={index < 6} />
+                  </motion.div>
+                ))}
               </div>
-            )}
-          </>
-        ) : (
-          <div className="flex flex-col items-center justify-center py-20 text-center">
-            <div className="mb-4 rounded-full bg-muted p-4">
-              <FolderOpen className="h-8 w-8 text-muted-foreground" />
-            </div>
-            <h2 className="text-xl font-semibold">
-              {getEmptyStateMessage.title}
-            </h2>
-            <p className="mt-2 max-w-md text-muted-foreground">
-              {getEmptyStateMessage.description}
-            </p>
-          </div>
-        )}
+
+              {totalPages > 1 && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.85, y: 20 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.85, y: 20 }}
+                  transition={{
+                    duration: 0.5,
+                    delay: 0.2,
+                    type: 'spring',
+                    stiffness: 300,
+                    damping: 25,
+                  }}
+                  className="fixed bottom-6 left-1/2 z-30 -translate-x-1/2 sm:bottom-8"
+                >
+                  <motion.div
+                    layout
+                    className="flex items-center gap-0.5 rounded-full border border-border/40 bg-background/70 px-3.5 py-2 shadow-2xl shadow-black/10 backdrop-blur-2xl supports-backdrop-filter:bg-background/50 dark:border-border/20 dark:bg-background/60 dark:shadow-black/30"
+                  >
+                    <motion.button
+                      whileHover={{ scale: 1.15 }}
+                      whileTap={{ scale: 0.9 }}
+                      onClick={() => {
+                        const page = Math.max(1, currentPage);
+                        const newPage = Math.max(1, page - 1);
+                        setCurrentPage(newPage);
+                      }}
+                      disabled={currentPage <= 1}
+                      className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground/70 transition-colors hover:bg-muted/60 hover:text-foreground disabled:pointer-events-none disabled:opacity-25"
+                      aria-label="Previous page"
+                    >
+                      <ChevronLeft className="h-3.5 w-3.5" />
+                    </motion.button>
+
+                    <motion.div
+                      key={currentPage}
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{
+                        duration: 0.25,
+                        type: 'spring',
+                        stiffness: 400,
+                        damping: 25,
+                      }}
+                      className="mx-2.5 flex min-w-[55px] items-center justify-center"
+                    >
+                      <span className="text-xs font-semibold tabular-nums tracking-tight">
+                        <span className="text-foreground">{currentPage}</span>
+                        <span className="mx-1 text-muted-foreground/50">/</span>
+                        <span className="text-muted-foreground/70">
+                          {totalPages}
+                        </span>
+                      </span>
+                    </motion.div>
+
+                    <motion.button
+                      whileHover={{ scale: 1.15 }}
+                      whileTap={{ scale: 0.9 }}
+                      onClick={() => {
+                        const page = Math.max(1, currentPage);
+                        const newPage = Math.min(totalPages, page + 1);
+                        setCurrentPage(newPage);
+                      }}
+                      disabled={currentPage >= totalPages}
+                      className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground/70 transition-colors hover:bg-muted/60 hover:text-foreground disabled:pointer-events-none disabled:opacity-25"
+                      aria-label="Next page"
+                    >
+                      <ChevronRight className="h-3.5 w-3.5" />
+                    </motion.button>
+                  </motion.div>
+                </motion.div>
+              )}
+            </motion.div>
+          ) : (
+            <motion.div
+              key="empty"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.4 }}
+              className="flex flex-col items-center justify-center py-24 text-center"
+            >
+              <motion.div
+                initial={{ scale: 0.8, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ duration: 0.4, delay: 0.1 }}
+                className="mb-6 rounded-2xl bg-gradient-to-br from-muted/50 to-muted p-6 shadow-sm"
+              >
+                <FolderOpen className="h-12 w-12 text-muted-foreground/60" />
+              </motion.div>
+              <h2 className="text-2xl font-semibold tracking-tight">
+                {getEmptyStateMessage.title}
+              </h2>
+              <p className="mt-3 max-w-md text-sm text-muted-foreground/80">
+                {getEmptyStateMessage.description}
+              </p>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </main>
     </div>
   );
