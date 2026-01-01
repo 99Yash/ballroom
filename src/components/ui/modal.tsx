@@ -41,7 +41,11 @@ export function Modal({
       if (setShowModal) {
         setShowModal(false);
       } else {
-        router.back();
+        if (typeof window !== 'undefined' && window.history.length > 1) {
+          router.back();
+        } else {
+          router.push('/');
+        }
       }
     },
     [preventDefaultClose, onClose, setShowModal, router]
