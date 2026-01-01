@@ -400,18 +400,7 @@ export function DashboardClient({
             >
               <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                 {videos.map((video, index) => (
-                  <motion.div
-                    key={video.id}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{
-                      duration: 0.4,
-                      delay: index * 0.03,
-                      ease: [0.4, 0, 0.2, 1],
-                    }}
-                  >
-                    <VideoCard video={video} priority={index < 6} />
-                  </motion.div>
+                  <VideoCard key={video.id} video={video} priority={index < 6} />
                 ))}
               </div>
 
