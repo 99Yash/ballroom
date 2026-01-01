@@ -70,16 +70,7 @@ export function VideoCard({ video, className, priority }: VideoCardProps) {
         )}
 
         <div className="absolute inset-0 flex items-center justify-center">
-          <motion.div
-            initial={{ scale: 0, opacity: 0 }}
-            whileHover={{ scale: 1, opacity: 1 }}
-            transition={{
-              type: 'spring',
-              stiffness: 300,
-              damping: 20,
-            }}
-            className="rounded-full bg-red-600 p-4 shadow-2xl ring-4 ring-red-600/20"
-          >
+          <div className="scale-0 rounded-full bg-red-600 p-4 opacity-0 shadow-2xl ring-4 ring-red-600/20 transition-all duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] group-hover:scale-100 group-hover:opacity-100">
             <svg
               className="h-7 w-7 text-white"
               fill="currentColor"
@@ -87,7 +78,7 @@ export function VideoCard({ video, className, priority }: VideoCardProps) {
             >
               <path d="M8 5v14l11-7z" />
             </svg>
-          </motion.div>
+          </div>
         </div>
 
         <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-card via-card/80 to-transparent opacity-0 transition-opacity duration-500 group-hover:opacity-100" />

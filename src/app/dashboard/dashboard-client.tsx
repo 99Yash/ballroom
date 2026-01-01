@@ -70,7 +70,17 @@ export function DashboardClient({
   const fetchVideos = React.useCallback(async () => {
     setIsLoading(true);
     try {
-      const page = Math.max(1, currentPage);
+      // Clamp page to valid range before fetching to prevent out-of-bounds requests
+      // Use previous totalPages to avoid unnecessary fetches
+      let page = Math.max(1, currentPage);
+      if (totalPages > 0 && page > totalPages) {
+        page = 1;
+        // Only update URL state if we're clamping the page
+        if (currentPage !== 1) {
+          setCurrentPage(1);
+        }
+      }
+
       const params = new URLSearchParams({
         page: page.toString(),
         limit: limit.toString(),
@@ -96,7 +106,9 @@ export function DashboardClient({
       setVideos(data.videos || []);
       setTotalPages(newTotalPages);
 
-      if (newTotalPages > 0 && page > newTotalPages) {
+      // Only reset to page 1 if we're out of bounds AND not already on page 1
+      // This prevents infinite loops if the API returns inconsistent totalPages
+      if (newTotalPages > 0 && page > newTotalPages && currentPage !== 1) {
         setCurrentPage(1);
       }
     } catch {
@@ -110,6 +122,7 @@ export function DashboardClient({
     selectedCategory,
     debouncedSearchQuery,
     limit,
+    totalPages,
     setCurrentPage,
   ]);
 
@@ -277,22 +290,19 @@ export function DashboardClient({
           className="mb-8"
         >
           <div className="relative max-w-md">
-            <Search
-              className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/60 transition-colors duration-200 peer-focus-within:text-muted-foreground"
-              aria-hidden="true"
-            />
             <Input
               type="search"
               placeholder="Search videos by title, description, or channel..."
               value={searchQuery}
               onChange={(e) => {
                 setSearchQuery(e.target.value);
-                if (!e.target.value) {
-                  setCurrentPage(1);
-                }
               }}
               className="peer h-11 rounded-xl border-border/50 bg-background pl-11 pr-11 text-sm shadow-sm transition-all duration-200 focus:border-ring focus:bg-background focus:shadow-md"
               aria-label="Search videos by title, description, or channel"
+            />
+            <Search
+              className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/60 transition-colors duration-200 peer-focus-within:text-muted-foreground"
+              aria-hidden="true"
             />
             <AnimatePresence>
               {searchQuery && (
@@ -399,7 +409,11 @@ export function DashboardClient({
             >
               <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                 {videos.map((video, index) => (
-                  <VideoCard key={video.id} video={video} priority={index < 6} />
+                  <VideoCard
+                    key={video.id}
+                    video={video}
+                    priority={index < 6}
+                  />
                 ))}
               </div>
 
