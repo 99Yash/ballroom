@@ -8,9 +8,10 @@ import type { SerializedVideo } from '~/types/video';
 interface VideoCardProps {
   video: SerializedVideo;
   className?: string;
+  priority?: boolean;
 }
 
-export function VideoCard({ video, className }: VideoCardProps) {
+export function VideoCard({ video, className, priority }: VideoCardProps) {
   const youtubeUrl = `https://www.youtube.com/watch?v=${video.youtubeId}`;
 
   return (
@@ -31,6 +32,7 @@ export function VideoCard({ video, className }: VideoCardProps) {
             src={video.thumbnailUrl}
             alt={video.title}
             fill
+            priority={priority}
             className="object-cover transition-transform duration-300 group-hover:scale-105"
             sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
           />

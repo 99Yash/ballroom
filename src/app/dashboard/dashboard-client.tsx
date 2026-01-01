@@ -189,7 +189,7 @@ export function DashboardClient({
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/60">
         <div className="container mx-auto flex h-16 items-center justify-between px-4">
           <div className="flex items-center gap-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-red-600">
@@ -298,8 +298,8 @@ export function DashboardClient({
         ) : videos.length > 0 ? (
           <>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {videos.map((video) => (
-                <VideoCard key={video.id} video={video} />
+              {videos.map((video, index) => (
+                <VideoCard key={video.id} video={video} priority={index < 6} />
               ))}
             </div>
 
