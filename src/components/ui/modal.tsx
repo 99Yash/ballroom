@@ -19,6 +19,19 @@ import {
   DrawerTitle,
 } from './drawer';
 
+function removeWidthClasses(className?: string): string {
+  if (!className) return '';
+  return className
+    .split(/\s+/)
+    .filter(
+      (cls) =>
+        !cls.startsWith('max-w-') &&
+        !cls.startsWith('w-') &&
+        !cls.startsWith('min-w-')
+    )
+    .join(' ');
+}
+
 export function Modal({
   children,
   className,
@@ -73,8 +86,8 @@ export function Modal({
               <DrawerDescription>Modal</DrawerDescription>
             </div>
           </VisuallyHidden>
-          <DrawerContent className={cn(className, 'p-2')}>
-            {children}
+          <DrawerContent className={cn(removeWidthClasses(className))}>
+            <div className="grid gap-4 px-6 pb-6 pt-4">{children}</div>
           </DrawerContent>
           <Drawer.Overlay />
         </Drawer.Portal>

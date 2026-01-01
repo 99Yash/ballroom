@@ -3,10 +3,8 @@
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { XIcon } from 'lucide-react';
 import * as React from 'react';
-import { Drawer as DrawerPrimitive } from 'vaul';
 
 import { cn } from '~/lib/utils';
-import { ModalContext } from './modal';
 
 function Dialog({
   ...props
@@ -83,22 +81,6 @@ function DialogContent({
 }
 
 function DialogHeader({ className, ...props }: React.ComponentProps<'div'>) {
-  const context = React.useContext(ModalContext);
-  const isDrawer = context?.isDrawer ?? false;
-
-  if (isDrawer) {
-    return (
-      <div
-        data-slot="drawer-header"
-        className={cn(
-          'flex flex-col gap-0.5 p-4 text-center md:gap-1.5 md:text-left',
-          className
-        )}
-        {...props}
-      />
-    );
-  }
-
   return (
     <div
       data-slot="dialog-header"
@@ -109,19 +91,6 @@ function DialogHeader({ className, ...props }: React.ComponentProps<'div'>) {
 }
 
 function DialogFooter({ className, ...props }: React.ComponentProps<'div'>) {
-  const context = React.useContext(ModalContext);
-  const isDrawer = context?.isDrawer ?? false;
-
-  if (isDrawer) {
-    return (
-      <div
-        data-slot="drawer-footer"
-        className={cn('mt-auto flex flex-col gap-2 p-4', className)}
-        {...props}
-      />
-    );
-  }
-
   return (
     <div
       data-slot="dialog-footer"
@@ -138,19 +107,6 @@ function DialogTitle({
   className,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Title>) {
-  const context = React.useContext(ModalContext);
-  const isDrawer = context?.isDrawer ?? false;
-
-  if (isDrawer) {
-    return (
-      <DrawerPrimitive.Title
-        data-slot="drawer-title"
-        className={cn('text-foreground font-semibold', className)}
-        {...props}
-      />
-    );
-  }
-
   return (
     <DialogPrimitive.Title
       data-slot="dialog-title"
@@ -164,19 +120,6 @@ function DialogDescription({
   className,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Description>) {
-  const context = React.useContext(ModalContext);
-  const isDrawer = context?.isDrawer ?? false;
-
-  if (isDrawer) {
-    return (
-      <DrawerPrimitive.Description
-        data-slot="drawer-description"
-        className={cn('text-muted-foreground text-sm', className)}
-        {...props}
-      />
-    );
-  }
-
   return (
     <DialogPrimitive.Description
       data-slot="dialog-description"
