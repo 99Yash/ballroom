@@ -19,13 +19,8 @@ import {
 import { VideoCard } from '~/components/video-card';
 import { authClient } from '~/lib/auth/client';
 import { siteConfig } from '~/lib/site';
+import type { Category } from '~/types/category';
 import type { SerializedVideo } from '~/types/video';
-
-interface Category {
-  id: string;
-  name: string;
-  isDefault: boolean;
-}
 
 interface DashboardClientProps {
   initialCategories: Category[];

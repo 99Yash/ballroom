@@ -6,6 +6,7 @@ import { validateCategoryName } from '~/lib/ai/categorize';
 import { requireSession } from '~/lib/auth/session';
 import { AppError, createErrorResponse } from '~/lib/errors';
 import { logger } from '~/lib/logger';
+import type { Category } from '~/types/category';
 import {
   createCategorySchema,
   validateRequestBody,
@@ -17,7 +18,12 @@ export async function GET() {
     const session = await requireSession();
 
     const userCategories = await db
-      .select()
+      .select({
+        id: categories.id,
+        name: categories.name,
+        isDefault: categories.isDefault,
+        parentCategoryId: categories.parentCategoryId,
+      })
       .from(categories)
       .where(eq(categories.userId, session.user.id))
       .orderBy(categories.createdAt);
@@ -28,7 +34,7 @@ export async function GET() {
       status: 200,
     });
 
-    return NextResponse.json({ categories: userCategories });
+    return NextResponse.json({ categories: userCategories as Category[] });
   } catch (error) {
     const errorResponse = createErrorResponse(error);
     logger.api('GET', '/api/categories', {
@@ -55,7 +61,10 @@ export async function POST(request: Request) {
     );
 
     const existing = await db
-      .select()
+      .select({
+        id: categories.id,
+        name: categories.name,
+      })
       .from(categories)
       .where(eq(categories.userId, session.user.id));
 
@@ -91,7 +100,12 @@ export async function POST(request: Request) {
         name: trimmedName,
         isDefault: false,
       })
-      .returning();
+      .returning({
+        id: categories.id,
+        name: categories.name,
+        isDefault: categories.isDefault,
+        parentCategoryId: categories.parentCategoryId,
+      });
 
     logger.api('POST', '/api/categories', {
       userId: session.user.id,
@@ -99,7 +113,7 @@ export async function POST(request: Request) {
       status: 200,
     });
 
-    return NextResponse.json({ category: newCategory });
+    return NextResponse.json({ category: newCategory as Category });
   } catch (error) {
     const errorResponse = createErrorResponse(error);
     logger.api('POST', '/api/categories', {

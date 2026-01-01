@@ -15,12 +15,7 @@ import {
 } from '~/components/ui/dialog';
 import { Input } from '~/components/ui/input';
 import { Spinner } from '~/components/ui/spinner';
-
-interface Category {
-  id: string;
-  name: string;
-  isDefault: boolean;
-}
+import type { Category } from '~/types/category';
 
 interface CategoryManagerProps {
   categories: Category[];
