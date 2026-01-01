@@ -1,17 +1,17 @@
 import { Analytics } from '@vercel/analytics/react';
 import { ThemeProvider } from 'next-themes';
 import { NuqsAdapter } from 'nuqs/adapters/next/app';
-import { Toaster } from 'sonner';
+import { Toaster } from '~/components/ui/sonner';
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <ThemeProvider
       attribute="class"
-      defaultTheme="light"
+      defaultTheme="system"
       enableSystem
       disableTransitionOnChange
     >
-      <Toaster richColors closeButton theme="system" />
+      <Toaster richColors closeButton />
       <NuqsAdapter>{children}</NuqsAdapter>
       <Analytics />
     </ThemeProvider>
