@@ -1,7 +1,7 @@
 import { and, eq } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
 import { db } from '~/db';
-import { categories } from '~/db/schemas';
+import { categories, categorySelect } from '~/db/schemas';
 import { requireSession } from '~/lib/auth/session';
 import { AppError, createErrorResponse } from '~/lib/errors';
 import { logger } from '~/lib/logger';
@@ -21,7 +21,7 @@ export async function DELETE(
     const session = await requireSession();
 
     const category = await db
-      .select()
+      .select({ id: categories.id })
       .from(categories)
       .where(and(eq(categories.id, id), eq(categories.userId, session.user.id)))
       .limit(1);
@@ -33,7 +33,9 @@ export async function DELETE(
       });
     }
 
-    await db.delete(categories).where(eq(categories.id, id));
+    await db
+      .delete(categories)
+      .where(and(eq(categories.id, id), eq(categories.userId, session.user.id)));
 
     logger.api('DELETE', `/api/categories/${id}`, {
       userId: session.user.id,
@@ -73,7 +75,7 @@ export async function PATCH(
     );
 
     const category = await db
-      .select()
+      .select({ id: categories.id })
       .from(categories)
       .where(and(eq(categories.id, id), eq(categories.userId, session.user.id)))
       .limit(1);
@@ -86,7 +88,10 @@ export async function PATCH(
     }
 
     const existing = await db
-      .select()
+      .select({
+        id: categories.id,
+        name: categories.name,
+      })
       .from(categories)
       .where(eq(categories.userId, session.user.id));
 
@@ -104,8 +109,8 @@ export async function PATCH(
     const [updated] = await db
       .update(categories)
       .set({ name: trimmedName })
-      .where(eq(categories.id, id))
-      .returning();
+      .where(and(eq(categories.id, id), eq(categories.userId, session.user.id)))
+      .returning(categorySelect);
 
     logger.api('PATCH', `/api/categories/${id}`, {
       userId: session.user.id,

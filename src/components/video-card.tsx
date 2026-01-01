@@ -8,9 +8,10 @@ import type { SerializedVideo } from '~/types/video';
 interface VideoCardProps {
   video: SerializedVideo;
   className?: string;
+  priority?: boolean;
 }
 
-export function VideoCard({ video, className }: VideoCardProps) {
+export function VideoCard({ video, className, priority }: VideoCardProps) {
   const youtubeUrl = `https://www.youtube.com/watch?v=${video.youtubeId}`;
 
   return (
@@ -31,6 +32,7 @@ export function VideoCard({ video, className }: VideoCardProps) {
             src={video.thumbnailUrl}
             alt={video.title}
             fill
+            priority={priority}
             className="object-cover transition-transform duration-300 group-hover:scale-105"
             sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
           />
@@ -77,12 +79,17 @@ export function VideoCard({ video, className }: VideoCardProps) {
         </h3>
 
         {video.channelName && (
-          <p className="text-xs text-muted-foreground">{video.channelName}</p>
+          <p className="truncate text-xs text-muted-foreground">
+            {video.channelName}
+          </p>
         )}
 
         {video.categoryName && (
-          <div className="mt-auto pt-2">
-            <Badge variant="secondary" className="text-xs">
+          <div className="mt-auto pt-2 w-full">
+            <Badge
+              variant="secondary"
+              className="w-full max-w-full truncate text-xs"
+            >
               {video.categoryName}
             </Badge>
           </div>

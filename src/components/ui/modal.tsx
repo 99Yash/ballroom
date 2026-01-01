@@ -1,0 +1,125 @@
+'use client';
+
+import * as Dialog from '@radix-ui/react-dialog';
+import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
+import { useRouter } from 'next/navigation';
+import { Drawer } from 'vaul';
+import { useIsMobile } from '~/hooks/use-mobile';
+import { cn } from '~/lib/utils';
+import {
+  DialogContent,
+  DialogDescription,
+  DialogOverlay,
+  DialogTitle,
+} from './dialog';
+import {
+  DrawerContent,
+  DrawerDescription,
+  DrawerOverlay,
+  DrawerTitle,
+} from './drawer';
+
+function removeWidthClasses(className?: string): string {
+  if (!className) return '';
+  return className
+    .split(/\s+/)
+    .filter(
+      (cls) =>
+        !cls.startsWith('max-w-') &&
+        !cls.startsWith('w-') &&
+        !cls.startsWith('min-w-')
+    )
+    .join(' ');
+}
+
+export function Modal({
+  children,
+  className,
+  showModal,
+  setShowModal,
+  onClose,
+  desktopOnly,
+  preventDefaultClose,
+}: {
+  children: React.ReactNode;
+  className?: string;
+  showModal?: boolean;
+  setShowModal?: React.Dispatch<React.SetStateAction<boolean>>;
+  onClose?: () => void;
+  desktopOnly?: boolean;
+  preventDefaultClose?: boolean;
+}) {
+  const router = useRouter();
+
+  const closeModal = ({ dragged }: { dragged?: boolean } = {}) => {
+    if (preventDefaultClose && !dragged) {
+      return;
+    }
+    // fire onClose event if provided
+    onClose?.();
+
+    // if setShowModal is defined, use it to close modal
+    if (setShowModal) {
+      setShowModal(false);
+      // else, this is intercepting route @modal
+    } else {
+      router.back();
+    }
+  };
+  const isMobile = useIsMobile();
+
+  if (isMobile && !desktopOnly) {
+    return (
+      <Drawer.Root
+        open={setShowModal ? showModal : true}
+        onOpenChange={(open) => {
+          if (!open) {
+            closeModal({ dragged: true });
+          }
+        }}
+      >
+        <DrawerOverlay />
+        <Drawer.Portal>
+          <VisuallyHidden asChild>
+            <div className="sr-only">
+              <DrawerTitle>Modal</DrawerTitle>
+              <DrawerDescription>Modal</DrawerDescription>
+            </div>
+          </VisuallyHidden>
+          <DrawerContent className={cn(removeWidthClasses(className))}>
+            <div className="grid gap-4 px-6 pb-6 pt-4">{children}</div>
+          </DrawerContent>
+          <Drawer.Overlay />
+        </Drawer.Portal>
+      </Drawer.Root>
+    );
+  }
+
+  return (
+    <Dialog.Root
+      open={setShowModal ? showModal : true}
+      onOpenChange={(open) => {
+        if (!open) {
+          closeModal();
+        }
+      }}
+    >
+      <Dialog.Portal>
+        <VisuallyHidden asChild>
+          <div className="sr-only">
+            <DialogTitle>Modal</DialogTitle>
+            <DialogDescription>Modal</DialogDescription>
+          </div>
+        </VisuallyHidden>
+        <DialogOverlay id="modal-backdrop" />
+        <DialogContent
+          onOpenAutoFocus={(e) => e.preventDefault()}
+          onCloseAutoFocus={(e) => e.preventDefault()}
+          className={cn(className)}
+        >
+          {children}
+        </DialogContent>
+      </Dialog.Portal>
+    </Dialog.Root>
+  );
+}

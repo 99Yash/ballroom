@@ -1,7 +1,11 @@
 import { eq } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
 import { db } from '~/db';
-import { categories, DEFAULT_CATEGORIES } from '~/db/schemas';
+import {
+  categories,
+  categorySelect,
+  DEFAULT_CATEGORIES,
+} from '~/db/schemas';
 import { validateCategoryName } from '~/lib/ai/categorize';
 import { requireSession } from '~/lib/auth/session';
 import { AppError, createErrorResponse } from '~/lib/errors';
@@ -17,7 +21,7 @@ export async function GET() {
     const session = await requireSession();
 
     const userCategories = await db
-      .select()
+      .select(categorySelect)
       .from(categories)
       .where(eq(categories.userId, session.user.id))
       .orderBy(categories.createdAt);
@@ -55,7 +59,10 @@ export async function POST(request: Request) {
     );
 
     const existing = await db
-      .select()
+      .select({
+        id: categories.id,
+        name: categories.name,
+      })
       .from(categories)
       .where(eq(categories.userId, session.user.id));
 
@@ -91,7 +98,7 @@ export async function POST(request: Request) {
         name: trimmedName,
         isDefault: false,
       })
-      .returning();
+      .returning(categorySelect);
 
     logger.api('POST', '/api/categories', {
       userId: session.user.id,
@@ -116,7 +123,7 @@ export async function POST(request: Request) {
 
 export async function initializeDefaultCategories(userId: string) {
   const existing = await db
-    .select()
+    .select({ id: categories.id })
     .from(categories)
     .where(eq(categories.userId, userId))
     .limit(1);

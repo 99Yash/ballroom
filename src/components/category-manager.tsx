@@ -5,22 +5,15 @@ import * as React from 'react';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import {
-  Dialog,
-  DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '~/components/ui/dialog';
 import { Input } from '~/components/ui/input';
+import { Modal } from '~/components/ui/modal';
 import { Spinner } from '~/components/ui/spinner';
-
-interface Category {
-  id: string;
-  name: string;
-  isDefault: boolean;
-}
+import type { Category } from '~/types/category';
 
 interface CategoryManagerProps {
   categories: Category[];
@@ -99,14 +92,16 @@ export function CategoryManager({
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogTrigger asChild>
-        <Button variant="outline" className="gap-2">
-          <Settings2 className="h-4 w-4" />
-          Manage Categories
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="max-w-md">
+    <>
+      <Button
+        variant="outline"
+        className="gap-2"
+        onClick={() => setIsOpen(true)}
+      >
+        <Settings2 className="h-4 w-4" />
+        Manage Categories
+      </Button>
+      <Modal showModal={isOpen} setShowModal={setIsOpen} className="max-w-md">
         <DialogHeader>
           <DialogTitle>Manage Categories</DialogTitle>
           <DialogDescription>
@@ -186,7 +181,7 @@ export function CategoryManager({
             Done
           </Button>
         </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      </Modal>
+    </>
   );
 }

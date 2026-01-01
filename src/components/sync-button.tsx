@@ -154,8 +154,8 @@ export function SyncButton({
     : null;
 
   return (
-    <div className="flex flex-col items-start gap-2">
-      <div className="flex items-center gap-2">
+    <div className="flex w-full flex-col items-start gap-2">
+      <div className="flex w-full flex-wrap items-center gap-2">
         {isDevelopment ? (
           <div className="flex">
             <Button
@@ -168,7 +168,8 @@ export function SyncButton({
               ) : (
                 <RefreshCWIcon size={16} />
               )}
-              Sync & Categorize
+              <span className="hidden sm:inline">Sync & Categorize</span>
+              <span className="sm:hidden">Sync</span>
             </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -227,7 +228,8 @@ export function SyncButton({
             ) : (
               <RefreshCWIcon size={16} />
             )}
-            Sync & Categorize
+            <span className="hidden sm:inline">Sync & Categorize</span>
+            <span className="sm:hidden">Sync</span>
           </Button>
         )}
 
@@ -242,13 +244,17 @@ export function SyncButton({
           ) : (
             <SparklesIcon size={16} />
           )}
-          Re-categorize
+          <span className="hidden sm:inline">Re-categorize</span>
+          <span className="sm:hidden">Recategorize</span>
         </Button>
 
         {lastSyncText && !isLoading && (
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Clock className="h-3 w-3" />
-            <span>Last sync {lastSyncText}</span>
+          <div className="flex w-full basis-full items-center gap-1.5 text-xs text-muted-foreground sm:w-auto sm:basis-auto">
+            <Clock className="h-3 w-3 shrink-0" />
+            <span className="truncate">
+              <span className="hidden sm:inline">Last sync </span>
+              {lastSyncText}
+            </span>
           </div>
         )}
       </div>

@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { redirect } from 'next/navigation';
 import { db } from '~/db';
-import { categories, user } from '~/db/schemas';
+import { categories, categorySelect, user } from '~/db/schemas';
 import { getSession } from '~/lib/auth/session';
 import { DashboardClient } from './dashboard-client';
 
@@ -22,7 +22,7 @@ export default async function DashboardPage() {
   }
 
   const userCategories = await db
-    .select()
+    .select(categorySelect)
     .from(categories)
     .where(eq(categories.userId, session.user.id))
     .orderBy(categories.createdAt);
