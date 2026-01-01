@@ -433,7 +433,7 @@ export function DashboardClient({
                 >
                   <motion.div
                     layout
-                    className="flex items-center gap-0.5 rounded-full border border-border/40 bg-background/70 px-3.5 py-2 shadow-2xl shadow-black/10 backdrop-blur-2xl supports-backdrop-filter:bg-background/50 dark:border-border/20 dark:bg-background/60 dark:shadow-black/30"
+                    className="flex items-center gap-1 rounded-full border-2 border-border bg-background/95 px-4 py-2.5 shadow-2xl shadow-black/20 backdrop-blur-xl supports-backdrop-filter:bg-background/90 dark:border-border/60 dark:bg-background/95 dark:shadow-black/40"
                   >
                     <motion.button
                       whileHover={{ scale: 1.15 }}
@@ -444,10 +444,10 @@ export function DashboardClient({
                         setCurrentPage(newPage);
                       }}
                       disabled={currentPage <= 1}
-                      className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground/70 transition-colors hover:bg-muted/60 hover:text-foreground disabled:pointer-events-none disabled:opacity-25"
+                      className="flex h-8 w-8 items-center justify-center rounded-full text-foreground/80 transition-all hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-30"
                       aria-label="Previous page"
                     >
-                      <ChevronLeft className="h-3.5 w-3.5" />
+                      <ChevronLeft className="h-4 w-4" />
                     </motion.button>
 
                     <motion.div
@@ -460,14 +460,14 @@ export function DashboardClient({
                         stiffness: 400,
                         damping: 25,
                       }}
-                      className="mx-2.5 flex min-w-[55px] items-center justify-center"
+                      className="mx-3 flex min-w-[60px] items-center justify-center"
                     >
-                      <span className="text-xs font-semibold tabular-nums tracking-tight">
+                      <span className="text-sm font-semibold tabular-nums tracking-tight">
                         <span className="text-foreground">{currentPage}</span>
-                        <span className="mx-1 text-muted-foreground/50">/</span>
-                        <span className="text-muted-foreground/70">
-                          {totalPages}
+                        <span className="mx-1.5 text-muted-foreground/60">
+                          /
                         </span>
+                        <span className="text-foreground/80">{totalPages}</span>
                       </span>
                     </motion.div>
 
@@ -480,10 +480,10 @@ export function DashboardClient({
                         setCurrentPage(newPage);
                       }}
                       disabled={currentPage >= totalPages}
-                      className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground/70 transition-colors hover:bg-muted/60 hover:text-foreground disabled:pointer-events-none disabled:opacity-25"
+                      className="flex h-8 w-8 items-center justify-center rounded-full text-foreground/80 transition-all hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-30"
                       aria-label="Next page"
                     >
-                      <ChevronRight className="h-3.5 w-3.5" />
+                      <ChevronRight className="h-4 w-4" />
                     </motion.button>
                   </motion.div>
                 </motion.div>
