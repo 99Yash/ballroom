@@ -191,13 +191,15 @@ export function DashboardClient({
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/60">
         <div className="container mx-auto flex h-16 items-center justify-between px-4">
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-red-600">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-red-600">
               <Youtube className="h-5 w-5 text-white" />
             </div>
-            <div>
-              <h1 className="text-lg font-semibold">{siteConfig.name}</h1>
-              <p className="text-xs text-muted-foreground">
+            <div className="min-w-0 flex-1">
+              <h1 className="truncate text-lg font-semibold">
+                {siteConfig.name}
+              </h1>
+              <p className="truncate text-xs text-muted-foreground">
                 Welcome, {userName}
               </p>
             </div>
@@ -256,6 +258,7 @@ export function DashboardClient({
             size="sm"
             onClick={() => handleCategoryChange(null)}
             disabled={isLoading}
+            className="whitespace-nowrap"
           >
             All ({categoryCounts.all || 0})
           </Button>
@@ -270,8 +273,12 @@ export function DashboardClient({
                 size="sm"
                 onClick={() => handleCategoryChange(category.id)}
                 disabled={isLoading}
+                className="whitespace-nowrap"
               >
-                {category.name} ({count})
+                <span className="truncate max-w-[120px] sm:max-w-none">
+                  {category.name}
+                </span>
+                <span className="ml-1">({count})</span>
               </Button>
             );
           })}
@@ -282,10 +289,13 @@ export function DashboardClient({
               }
               size="sm"
               onClick={() => handleCategoryChange('uncategorized')}
-              className="border-dashed"
+              className="border-dashed whitespace-nowrap"
               disabled={isLoading}
             >
-              Uncategorized ({categoryCounts.uncategorized})
+              <span className="truncate max-w-[100px] sm:max-w-none">
+                Uncategorized
+              </span>
+              <span className="ml-1">({categoryCounts.uncategorized})</span>
             </Button>
           )}
         </div>

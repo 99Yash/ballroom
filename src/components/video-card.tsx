@@ -79,12 +79,17 @@ export function VideoCard({ video, className, priority }: VideoCardProps) {
         </h3>
 
         {video.channelName && (
-          <p className="text-xs text-muted-foreground">{video.channelName}</p>
+          <p className="truncate text-xs text-muted-foreground">
+            {video.channelName}
+          </p>
         )}
 
         {video.categoryName && (
-          <div className="mt-auto pt-2">
-            <Badge variant="secondary" className="text-xs">
+          <div className="mt-auto pt-2 w-full">
+            <Badge
+              variant="secondary"
+              className="w-full max-w-full truncate text-xs"
+            >
               {video.categoryName}
             </Badge>
           </div>
