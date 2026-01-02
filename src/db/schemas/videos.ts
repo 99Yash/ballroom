@@ -89,6 +89,16 @@ export const videos = pgTable(
     index('idx_videos_user_id').on(table.userId),
     index('idx_videos_category_id').on(table.categoryId),
     index('idx_videos_youtube_id').on(table.youtubeId),
+    // Composite index for common query pattern: filter by userId, order by createdAt DESC
+    index('idx_videos_user_id_created_at').on(
+      table.userId,
+      table.createdAt
+    ),
+    // Composite index for category filtering: filter by userId and categoryId
+    index('idx_videos_user_id_category_id').on(
+      table.userId,
+      table.categoryId
+    ),
     // GIN index for full-text search: weighted search (title A, description B, channel_name C)
     index('idx_videos_search_vector').using(
       'gin',
