@@ -24,13 +24,7 @@ export const updateCategorySchema = z.object({
 });
 
 export const syncVideosSchema = z.object({
-  limit: z
-    .number()
-    .int()
-    .positive()
-    .max(500, 'Limit cannot exceed 500')
-    .optional()
-    .default(100),
+  mode: z.enum(['quick', 'extended']).optional().default('quick'),
 });
 
 export const categorizeVideosSchema = z.object({

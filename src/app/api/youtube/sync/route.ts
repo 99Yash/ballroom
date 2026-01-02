@@ -2,8 +2,9 @@ import { NextResponse } from 'next/server';
 import { requireSession } from '~/lib/auth/session';
 import { createErrorResponse } from '~/lib/errors';
 import { logger } from '~/lib/logger';
+import { formatQuotaForClient, getUserQuotas } from '~/lib/quota';
+import { extendedSync, quickSync } from '~/lib/sync';
 import { syncVideosSchema, validateRequestBody } from '~/lib/validations/api';
-import { syncLikedVideosForUser } from '~/lib/youtube';
 
 export async function POST(request: Request) {
   const startTime = Date.now();
@@ -11,27 +12,34 @@ export async function POST(request: Request) {
     const session = await requireSession();
     const body = await request.json().catch(() => ({}));
 
-    const { limit } = validateRequestBody(syncVideosSchema, body);
+    const { mode } = validateRequestBody(syncVideosSchema, body);
 
-    const result = await syncLikedVideosForUser(session.user.id, limit);
+    const syncFn = mode === 'extended' ? extendedSync : quickSync;
+    const result = await syncFn(session.user.id, { checkQuota: true });
 
-    const response = NextResponse.json({
-      synced: result.synced,
-      new: result.new,
-      existing: result.existing,
-      message:
-        result.new > 0
-          ? `Synced ${result.new} new videos`
-          : 'No new videos found',
-    });
+    const quotas = await getUserQuotas(session.user.id);
 
     logger.api('POST', '/api/youtube/sync', {
       userId: session.user.id,
       duration: Date.now() - startTime,
       status: 200,
+      mode,
+      synced: result.synced,
+      new: result.new,
     });
 
-    return response;
+    return NextResponse.json({
+      synced: result.synced,
+      new: result.new,
+      existing: result.existing,
+      unliked: result.unliked,
+      reachedEnd: result.reachedEnd,
+      message:
+        result.new > 0
+          ? `Synced ${result.new} new videos`
+          : 'No new videos found',
+      quota: formatQuotaForClient(quotas),
+    });
   } catch (error) {
     logger.error('Error syncing videos', error, {
       duration: Date.now() - startTime,

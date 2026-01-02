@@ -6,25 +6,68 @@ import {
   tags,
 } from '@trigger.dev/sdk';
 import * as z from 'zod/v4';
-import { categorizeUserVideos } from '~/lib/ai/categorize';
-import { AuthenticationError } from '~/lib/errors';
-import { syncLikedVideosForUser } from '~/lib/youtube';
+import { APP_CONFIG } from '~/lib/constants';
+import { AppError, AuthenticationError } from '~/lib/errors';
+import { fullSync, quickSync } from '~/lib/sync';
 
-/**
- * Shared payload schema for sync tasks
- */
 const syncPayloadSchema = z.object({
   userId: z.string().min(1, 'userId is required'),
 });
 
+function handleSyncError(
+  error: unknown,
+  payload: { userId: string },
+  ctx: { run: { id: string } }
+) {
+  metadata
+    .set('status', 'failed')
+    .set('errorMessage', error instanceof Error ? error.message : String(error))
+    .set('endTime', new Date().toISOString());
+
+  if (error instanceof AuthenticationError) {
+    metadata
+      .set('errorType', 'auth_error')
+      .set('authErrorType', error.authErrorType)
+      .set('requiresReauthentication', error.requiresReauthentication())
+      .set('aborted', true);
+
+    logger.error('Sync aborted - auth error', {
+      userId: payload.userId,
+      runId: ctx.run.id,
+      authErrorType: error.authErrorType,
+      error: error.message,
+    });
+    throw new AbortTaskRunError(error.message);
+  }
+
+  if (error instanceof AppError && error.code === 'QUOTA_EXCEEDED') {
+    metadata.set('errorType', 'quota_exceeded').set('aborted', true);
+
+    logger.warn('Sync aborted - quota exceeded', {
+      userId: payload.userId,
+      runId: ctx.run.id,
+      error: error.message,
+    });
+    throw new AbortTaskRunError(error.message);
+  }
+
+  metadata.set('errorType', 'retriable_error').set('willRetry', true);
+
+  logger.error('Sync failed', {
+    userId: payload.userId,
+    runId: ctx.run.id,
+    error: error instanceof Error ? error.message : String(error),
+  });
+}
+
 /**
- * Initial sync task - triggered after user completes onboarding
- * Fetches ALL liked videos (no limit) and categorizes them
+ * Initial sync task - triggered after user completes onboarding or requests full sync
+ * Fetches ALL liked videos using progressive sync (no auto-categorization)
  */
 export const initialSyncTask = schemaTask({
   id: 'initial-sync',
   schema: syncPayloadSchema,
-  maxDuration: 600, // 10 minutes max for initial sync
+  maxDuration: 600,
   retry: {
     maxAttempts: 3,
     minTimeoutInMs: 5000,
@@ -33,37 +76,7 @@ export const initialSyncTask = schemaTask({
     randomize: true,
   },
   catchError: async ({ error, ctx, payload }) => {
-    metadata
-      .set('status', 'failed')
-      .set(
-        'errorMessage',
-        error instanceof Error ? error.message : String(error)
-      )
-      .set('endTime', new Date().toISOString());
-
-    if (error instanceof AuthenticationError) {
-      metadata
-        .set('errorType', 'auth_error')
-        .set('authErrorType', error.authErrorType)
-        .set('requiresReauthentication', error.requiresReauthentication())
-        .set('aborted', true);
-
-      logger.error('Initial sync aborted - auth error', {
-        userId: payload.userId,
-        runId: ctx.run.id,
-        authErrorType: error.authErrorType,
-        error: error.message,
-      });
-      throw new AbortTaskRunError(error.message);
-    }
-
-    metadata.set('errorType', 'retriable_error').set('willRetry', true);
-
-    logger.error('Initial sync failed', {
-      userId: payload.userId,
-      runId: ctx.run.id,
-      error: error instanceof Error ? error.message : String(error),
-    });
+    handleSyncError(error, payload, ctx);
   },
   run: async ({ userId }) => {
     logger.info('Starting initial sync for user', { userId });
@@ -75,74 +88,46 @@ export const initialSyncTask = schemaTask({
       .set('status', 'starting')
       .set('userId', userId)
       .set('phase', 'sync')
+      .set('maxDepth', APP_CONFIG.sync.progressiveMaxDepth)
       .set('startTime', new Date().toISOString());
 
     metadata.set('status', 'syncing');
 
-    const syncResult = await syncLikedVideosForUser(userId);
+    const syncResult = await fullSync(userId, { checkQuota: true });
 
-    logger.info('Synced videos from YouTube', {
+    logger.info('Initial sync completed', {
       userId,
       synced: syncResult.synced,
       new: syncResult.new,
+      existing: syncResult.existing,
+      unliked: syncResult.unliked,
+      reachedEnd: syncResult.reachedEnd,
     });
 
     metadata
+      .set('status', 'completed')
       .set('syncCompleted', true)
       .set('videosSynced', syncResult.synced)
-      .set('newVideos', syncResult.new);
-
-    if (syncResult.new > 0) {
-      metadata
-        .set('status', 'categorizing')
-        .set('phase', 'categorization')
-        .set('totalToCategorize', syncResult.new);
-
-      const categorizeResult = await categorizeUserVideos(userId);
-
-      logger.info('Categorized videos', {
-        userId,
-        categorized: categorizeResult.categorized,
-        total: categorizeResult.total,
-      });
-
-      metadata
-        .set('status', 'completed')
-        .set('categorizeCompleted', true)
-        .set('videosCategorized', categorizeResult.categorized)
-        .set('totalVideos', categorizeResult.total)
-        .set('videosSkipped', categorizeResult.skipped)
-        .set('endTime', new Date().toISOString());
-
-      return {
-        sync: syncResult,
-        categorize: categorizeResult,
-      };
-    }
-
-    metadata
-      .set('status', 'completed')
-      .set('categorizeCompleted', false)
-      .set('reason', 'no_new_videos')
+      .set('newVideos', syncResult.new)
+      .set('existingVideos', syncResult.existing)
+      .set('unlikedVideos', syncResult.unliked)
+      .set('reachedEnd', syncResult.reachedEnd)
       .set('endTime', new Date().toISOString());
 
-    return {
-      sync: syncResult,
-      categorize: { categorized: 0, total: 0, skipped: 0 },
-    };
+    return { sync: syncResult };
   },
 });
 
 /**
  * Incremental sync task - called by the hourly schedule
- * Fetches only recent videos (limit 50) and categorizes new ones
+ * Uses progressive sync with quick limits (no auto-categorization)
  */
 export const incrementalSyncTask = schemaTask({
   id: 'incremental-sync',
   schema: syncPayloadSchema,
-  maxDuration: 300, // 5 minutes max
+  maxDuration: 300,
   queue: {
-    concurrencyLimit: 5, // Process max 5 users concurrently to avoid rate limits
+    concurrencyLimit: 5,
   },
   retry: {
     maxAttempts: 3,
@@ -152,37 +137,7 @@ export const incrementalSyncTask = schemaTask({
     randomize: true,
   },
   catchError: async ({ error, ctx, payload }) => {
-    metadata
-      .set('status', 'failed')
-      .set(
-        'errorMessage',
-        error instanceof Error ? error.message : String(error)
-      )
-      .set('endTime', new Date().toISOString());
-
-    if (error instanceof AuthenticationError) {
-      metadata
-        .set('errorType', 'auth_error')
-        .set('authErrorType', error.authErrorType)
-        .set('requiresReauthentication', error.requiresReauthentication())
-        .set('aborted', true);
-
-      logger.warn('Incremental sync aborted - auth error', {
-        userId: payload.userId,
-        runId: ctx.run.id,
-        authErrorType: error.authErrorType,
-        error: error.message,
-      });
-      throw new AbortTaskRunError(error.message);
-    }
-
-    metadata.set('errorType', 'retriable_error').set('willRetry', true);
-
-    logger.error('Incremental sync failed', {
-      userId: payload.userId,
-      runId: ctx.run.id,
-      error: error instanceof Error ? error.message : String(error),
-    });
+    handleSyncError(error, payload, ctx);
   },
   run: async ({ userId }) => {
     logger.info('Starting incremental sync for user', { userId });
@@ -195,59 +150,29 @@ export const incrementalSyncTask = schemaTask({
       .set('userId', userId)
       .set('phase', 'sync')
       .set('syncType', 'incremental')
+      .set('initialLimit', APP_CONFIG.sync.quickSyncLimit)
       .set('startTime', new Date().toISOString());
 
-    metadata.set('status', 'syncing').set('limit', 50);
+    metadata.set('status', 'syncing');
 
-    const syncResult = await syncLikedVideosForUser(userId, 50);
+    const syncResult = await quickSync(userId, { checkQuota: true });
 
     logger.info('Incremental sync completed', {
       userId,
       synced: syncResult.synced,
       new: syncResult.new,
+      existing: syncResult.existing,
     });
 
     metadata
+      .set('status', 'completed')
       .set('syncCompleted', true)
       .set('videosSynced', syncResult.synced)
-      .set('newVideos', syncResult.new);
-
-    if (syncResult.new > 0) {
-      metadata
-        .set('status', 'categorizing')
-        .set('phase', 'categorization')
-        .set('totalToCategorize', syncResult.new);
-
-      const categorizeResult = await categorizeUserVideos(userId);
-
-      logger.info('Categorized new videos', {
-        userId,
-        categorized: categorizeResult.categorized,
-      });
-
-      metadata
-        .set('status', 'completed')
-        .set('categorizeCompleted', true)
-        .set('videosCategorized', categorizeResult.categorized)
-        .set('totalVideos', categorizeResult.total)
-        .set('videosSkipped', categorizeResult.skipped)
-        .set('endTime', new Date().toISOString());
-
-      return {
-        sync: syncResult,
-        categorize: categorizeResult,
-      };
-    }
-
-    metadata
-      .set('status', 'completed')
-      .set('categorizeCompleted', false)
-      .set('reason', 'no_new_videos')
+      .set('newVideos', syncResult.new)
+      .set('existingVideos', syncResult.existing)
+      .set('reachedEnd', syncResult.reachedEnd)
       .set('endTime', new Date().toISOString());
 
-    return {
-      sync: syncResult,
-      categorize: { categorized: 0, total: 0, skipped: 0 },
-    };
+    return { sync: syncResult };
   },
 });

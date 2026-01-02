@@ -1,15 +1,37 @@
-import { boolean, index, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
+import {
+  boolean,
+  index,
+  integer,
+  pgTable,
+  text,
+  timestamp,
+} from 'drizzle-orm/pg-core';
+import { APP_CONFIG } from '~/lib/constants';
 import { lifecycle_dates } from './helpers';
 
-export const user = pgTable('user', {
-  id: text('id').primaryKey(),
-  name: text('name').notNull(),
-  email: text('email').notNull().unique(),
-  emailVerified: boolean('email_verified').default(false).notNull(),
-  image: text('image'),
-  onboardedAt: timestamp('onboarded_at'), // null = not onboarded yet
-  ...lifecycle_dates,
-});
+export const user = pgTable(
+  'user',
+  {
+    id: text('id').primaryKey(),
+    name: text('name').notNull(),
+    email: text('email').notNull().unique(),
+    emailVerified: boolean('email_verified').default(false).notNull(),
+    image: text('image'),
+    onboardedAt: timestamp('onboarded_at'),
+    // Quota tracking
+    syncQuotaUsed: integer('sync_quota_used').default(0).notNull(),
+    syncQuotaLimit: integer('sync_quota_limit')
+      .default(APP_CONFIG.quota.sync.freeLimit)
+      .notNull(),
+    categorizeQuotaUsed: integer('categorize_quota_used').default(0).notNull(),
+    categorizeQuotaLimit: integer('categorize_quota_limit')
+      .default(APP_CONFIG.quota.categorize.freeLimit)
+      .notNull(),
+    quotaResetAt: timestamp('quota_reset_at'),
+    ...lifecycle_dates,
+  },
+  (table) => [index('idx_user_quota_reset_at').on(table.quotaResetAt)]
+);
 
 export const session = pgTable(
   'session',

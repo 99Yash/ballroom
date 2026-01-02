@@ -4,6 +4,7 @@ import { and, eq, inArray, isNull, lt, or } from 'drizzle-orm';
 import * as z from 'zod/v4';
 import { db } from '~/db';
 import { categories, DatabaseVideo, videos } from '~/db/schemas';
+import { VIDEO_SYNC_STATUS } from '~/lib/constants';
 import { logger } from '~/lib/logger';
 
 interface VideoForCategorization {
@@ -261,7 +262,12 @@ export async function categorizeUserVideos(
     videosToAnalyze = await db
       .select()
       .from(videos)
-      .where(eq(videos.userId, userId));
+      .where(
+        and(
+          eq(videos.userId, userId),
+          eq(videos.syncStatus, VIDEO_SYNC_STATUS.ACTIVE)
+        )
+      );
 
     logger.info('Force re-categorization requested', {
       userId,
@@ -274,6 +280,7 @@ export async function categorizeUserVideos(
       .where(
         and(
           eq(videos.userId, userId),
+          eq(videos.syncStatus, VIDEO_SYNC_STATUS.ACTIVE),
           or(
             isNull(videos.categoryId),
             isNull(videos.lastAnalyzedAt),

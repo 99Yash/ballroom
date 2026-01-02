@@ -9,11 +9,17 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '~/components/ui/dropdown-menu';
 import { RefreshCWIcon } from '~/components/ui/icons/refresh-cw';
 import { SparklesIcon } from '~/components/ui/icons/sparkles';
 import { Spinner } from '~/components/ui/spinner';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '~/components/ui/tooltip';
 
 interface SyncButtonProps {
   onSyncComplete?: (result: { synced: number; new: number }) => void;
@@ -23,6 +29,19 @@ interface SyncButtonProps {
 interface SyncStatus {
   lastSyncAt: string | null;
   totalVideos: number;
+}
+
+interface QuotaInfo {
+  used: number;
+  limit: number;
+  remaining: number;
+  percentageUsed: number;
+  resetAt: string | null;
+}
+
+interface QuotaState {
+  sync: QuotaInfo;
+  categorize: QuotaInfo;
 }
 
 const isDevelopment = process.env.NODE_ENV === 'development';
@@ -35,6 +54,7 @@ export function SyncButton({
   const [isCategorizing, setIsCategorizing] = React.useState(false);
   const [status, setStatus] = React.useState<string | null>(null);
   const [syncStatus, setSyncStatus] = React.useState<SyncStatus | null>(null);
+  const [quota, setQuota] = React.useState<QuotaState | null>(null);
 
   const fetchSyncStatus = React.useCallback(async () => {
     try {
@@ -44,23 +64,37 @@ export function SyncButton({
         setSyncStatus(data);
       }
     } catch {
-      // Sync status is optional, so we silently fail
+      // Sync status is optional
+    }
+  }, []);
+
+  const fetchQuota = React.useCallback(async () => {
+    try {
+      const response = await fetch('/api/quota');
+      if (response.ok) {
+        const data = await response.json();
+        setQuota(data);
+      }
+    } catch {
+      // Quota is optional
     }
   }, []);
 
   React.useEffect(() => {
     fetchSyncStatus();
-  }, [fetchSyncStatus]);
+    fetchQuota();
+  }, [fetchSyncStatus, fetchQuota]);
 
-  const handleSync = async (limit: number) => {
+  const handleSync = async (mode: 'quick' | 'extended') => {
     setIsSyncing(true);
-    setStatus(`Fetching up to ${limit} liked videos...`);
+    const modeLabel = mode === 'extended' ? 'Extended' : 'Quick';
+    setStatus(`${modeLabel} sync in progress...`);
 
     try {
       const response = await fetch('/api/youtube/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ limit }),
+        body: JSON.stringify({ mode }),
       });
 
       if (!response.ok) {
@@ -69,20 +103,34 @@ export function SyncButton({
       }
 
       const result = await response.json();
-      setStatus(`Synced ${result.new} new videos`);
+
+      if (result.quota) {
+        setQuota(result.quota);
+      }
+
+      const message =
+        result.new > 0
+          ? `Synced ${result.new} new videos`
+          : 'No new videos found';
+
+      setStatus(message);
+      toast.success('Sync complete', { description: message });
       onSyncComplete?.(result);
 
       await fetchSyncStatus();
-      await handleCategorize();
+      setTimeout(() => setStatus(null), 3000);
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : 'Sync failed');
+      const errorMessage =
+        error instanceof Error ? error.message : 'Sync failed';
+      setStatus(errorMessage);
+      toast.error('Sync failed', { description: errorMessage });
     } finally {
       setIsSyncing(false);
     }
   };
 
-  const handleQuickSync = () => handleSync(100);
-  const handleExtendedSync = () => handleSync(500);
+  const handleQuickSync = () => handleSync('quick');
+  const handleExtendedSync = () => handleSync('extended');
 
   const handleFullSync = async () => {
     setIsSyncing(true);
@@ -98,7 +146,6 @@ export function SyncButton({
         throw new Error(error.error || 'Failed to start full sync');
       }
 
-      await response.json();
       toast.success('Full sync started', {
         description:
           'Syncing all your liked videos in the background. This may take a few minutes.',
@@ -108,10 +155,13 @@ export function SyncButton({
       setTimeout(() => {
         setStatus(null);
         fetchSyncStatus();
+        fetchQuota();
       }, 5000);
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : 'Full sync failed');
-      toast.error('Failed to start full sync');
+      const errorMessage =
+        error instanceof Error ? error.message : 'Full sync failed';
+      setStatus(errorMessage);
+      toast.error('Failed to start full sync', { description: errorMessage });
     } finally {
       setIsSyncing(false);
     }
@@ -134,14 +184,26 @@ export function SyncButton({
       }
 
       const result = await response.json();
-      setStatus(`Categorized ${result.categorized} videos`);
+
+      if (result.quota) {
+        setQuota(result.quota);
+      }
+
+      const message =
+        result.categorized > 0
+          ? `Categorized ${result.categorized} videos`
+          : 'All videos already categorized';
+
+      setStatus(message);
+      toast.success('Categorization complete', { description: message });
       onCategorizeComplete?.(result);
 
       setTimeout(() => setStatus(null), 3000);
     } catch (error) {
-      setStatus(
-        error instanceof Error ? error.message : 'Categorization failed'
-      );
+      const errorMessage =
+        error instanceof Error ? error.message : 'Categorization failed';
+      setStatus(errorMessage);
+      toast.error('Categorization failed', { description: errorMessage });
     } finally {
       setIsCategorizing(false);
     }
@@ -153,100 +215,115 @@ export function SyncButton({
     ? formatDistanceToNow(new Date(syncStatus.lastSyncAt), { addSuffix: true })
     : null;
 
+  const categorizeQuotaText = quota
+    ? `${quota.categorize.remaining}/${quota.categorize.limit}`
+    : null;
+
+  const isCategorizeQuotaLow = quota && quota.categorize.percentageUsed >= 80;
+  const isCategorizeQuotaExceeded = quota && quota.categorize.remaining <= 0;
+
   return (
     <div className="flex w-full flex-col items-start gap-2">
       <div className="flex w-full flex-wrap items-center gap-2">
-        {isDevelopment ? (
-          <div className="flex">
-            <Button
-              onClick={handleQuickSync}
-              disabled={isLoading}
-              className="gap-2 rounded-r-none"
-            >
-              {isSyncing ? (
-                <Spinner className="h-4 w-4" />
-              ) : (
-                <RefreshCWIcon size={16} />
-              )}
-              <span className="hidden sm:inline">Sync & Categorize</span>
-              <span className="sm:hidden">Sync</span>
-            </Button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  disabled={isLoading}
-                  className="rounded-l-none border-l border-l-primary-foreground/20 px-2"
-                >
-                  <ChevronDown className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem
-                  onClick={handleQuickSync}
-                  disabled={isLoading}
-                >
-                  <RefreshCWIcon size={16} className="mr-2" />
-                  <div>
-                    <div className="font-medium">Quick Sync</div>
-                    <div className="text-xs text-muted-foreground">
-                      Fetch last 100 videos
-                    </div>
-                  </div>
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={handleExtendedSync}
-                  disabled={isLoading}
-                >
-                  <FastForward className="mr-2 h-4 w-4" />
-                  <div>
-                    <div className="font-medium">Extended Sync</div>
-                    <div className="text-xs text-muted-foreground">
-                      Fetch last 500 videos
-                    </div>
-                  </div>
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={handleFullSync} disabled={isLoading}>
-                  <RotateCcw className="mr-2 h-4 w-4" />
-                  <div>
-                    <div className="font-medium">Full Sync (Dev Only)</div>
-                    <div className="text-xs text-muted-foreground">
-                      Sync all liked videos (background, rate limited)
-                    </div>
-                  </div>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        ) : (
+        <div className="flex">
           <Button
             onClick={handleQuickSync}
             disabled={isLoading}
-            className="gap-2"
+            className="gap-2 rounded-r-none"
           >
             {isSyncing ? (
               <Spinner className="h-4 w-4" />
             ) : (
               <RefreshCWIcon size={16} />
             )}
-            <span className="hidden sm:inline">Sync & Categorize</span>
+            <span className="hidden sm:inline">Sync Videos</span>
             <span className="sm:hidden">Sync</span>
           </Button>
-        )}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                disabled={isLoading}
+                className="rounded-l-none border-l border-l-primary-foreground/20 px-2"
+              >
+                <ChevronDown className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={handleQuickSync} disabled={isLoading}>
+                <RefreshCWIcon size={16} className="mr-2" />
+                <div>
+                  <div className="font-medium">Quick Sync</div>
+                  <div className="text-xs text-muted-foreground">
+                    Progressive sync, catches new videos
+                  </div>
+                </div>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={handleExtendedSync}
+                disabled={isLoading}
+              >
+                <FastForward className="mr-2 h-4 w-4" />
+                <div>
+                  <div className="font-medium">Extended Sync</div>
+                  <div className="text-xs text-muted-foreground">
+                    Deeper sync, catches more older videos
+                  </div>
+                </div>
+              </DropdownMenuItem>
+              {isDevelopment && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={handleFullSync}
+                    disabled={isLoading}
+                  >
+                    <RotateCcw className="mr-2 h-4 w-4" />
+                    <div>
+                      <div className="font-medium">Full Sync (Dev Only)</div>
+                      <div className="text-xs text-muted-foreground">
+                        Sync all liked videos in background
+                      </div>
+                    </div>
+                  </DropdownMenuItem>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
 
-        <Button
-          onClick={handleCategorize}
-          disabled={isLoading}
-          variant="outline"
-          className="gap-2"
-        >
-          {isCategorizing ? (
-            <Spinner className="h-4 w-4" />
-          ) : (
-            <SparklesIcon size={16} />
-          )}
-          <span className="hidden sm:inline">Re-categorize</span>
-          <span className="sm:hidden">Recategorize</span>
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              onClick={handleCategorize}
+              disabled={isLoading || !!isCategorizeQuotaExceeded}
+              variant="outline"
+              className="gap-2"
+            >
+              {isCategorizing ? (
+                <Spinner className="h-4 w-4" />
+              ) : (
+                <SparklesIcon size={16} />
+              )}
+              <span className="hidden sm:inline">Categorize</span>
+              {categorizeQuotaText && (
+                <span
+                  className={`text-xs ${
+                    isCategorizeQuotaLow
+                      ? 'text-amber-500'
+                      : 'text-muted-foreground'
+                  }`}
+                >
+                  ({categorizeQuotaText})
+                </span>
+              )}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            {isCategorizeQuotaExceeded
+              ? 'Quota exceeded. Resets monthly.'
+              : 'Categorize uncategorized videos with AI'}
+          </TooltipContent>
+        </Tooltip>
 
         {lastSyncText && !isLoading && (
           <div className="flex w-full basis-full items-center gap-1.5 text-xs text-muted-foreground sm:w-auto sm:basis-auto">

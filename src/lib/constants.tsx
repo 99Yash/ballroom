@@ -40,9 +40,34 @@ export const APP_CONFIG = {
   youtube: {
     defaultSyncLimit: 100,
     maxSyncLimit: 500,
+    apiPageSize: 50,
   },
   ai: {
     batchSize: 10,
     maxRetries: 3,
   },
+  sync: {
+    progressiveMaxDepth: 10_000,
+    quickSyncLimit: 50,
+    extendedSyncLimit: 500,
+    batchSize: 50,
+  },
+  quota: {
+    sync: {
+      freeLimit: 5_000,
+      paidLimit: 50_000,
+    },
+    categorize: {
+      freeLimit: 500,
+      paidLimit: 5_000,
+    },
+    resetDayOfMonth: 1,
+  },
 } as const;
+
+export type VideoSyncStatus = 'active' | 'unliked';
+
+export const VIDEO_SYNC_STATUS = {
+  ACTIVE: 'active',
+  UNLIKED: 'unliked',
+} as const satisfies Record<string, VideoSyncStatus>;
