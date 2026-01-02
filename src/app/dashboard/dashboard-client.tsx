@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useRouter } from 'next/navigation';
-import { parseAsInteger, useQueryState } from 'nuqs';
+import { parseAsInteger, parseAsString, useQueryState } from 'nuqs';
 import * as React from 'react';
 import { toast } from 'sonner';
 import { CategoryManager } from '~/components/category-manager';
@@ -34,6 +34,11 @@ const pageParser = parseAsInteger.withDefault(1).withOptions({
   shallow: false,
 });
 
+const searchParser = parseAsString.withDefault('').withOptions({
+  history: 'push',
+  shallow: false,
+});
+
 export function DashboardClient({
   initialCategories,
   userName,
@@ -45,27 +50,30 @@ export function DashboardClient({
   const [selectedCategory, setSelectedCategory] = React.useState<string | null>(
     null
   );
-  const [searchQuery, setSearchQuery] = React.useState('');
-  const [debouncedSearchQuery, setDebouncedSearchQuery] = React.useState('');
+  const [searchQuery, setSearchQuery] = useQueryState('search', searchParser);
+  const [localSearchQuery, setLocalSearchQuery] = React.useState(searchQuery || '');
   const [currentPage, setCurrentPage] = useQueryState('page', pageParser);
   const [totalPages, setTotalPages] = React.useState(0);
   const [isLoading, setIsLoading] = React.useState(true);
   const limit = 24;
 
-  const prevSearchQueryRef = React.useRef(searchQuery);
+  React.useEffect(() => {
+    setLocalSearchQuery(searchQuery || '');
+  }, [searchQuery]);
 
   React.useEffect(() => {
     const timer = setTimeout(() => {
-      const hasChanged = prevSearchQueryRef.current !== searchQuery;
-      prevSearchQueryRef.current = searchQuery;
-      setDebouncedSearchQuery(searchQuery);
-      if (hasChanged) {
+      const trimmedLocal = localSearchQuery.trim();
+      const trimmedUrl = (searchQuery || '').trim();
+      
+      if (trimmedLocal !== trimmedUrl) {
+        setSearchQuery(trimmedLocal || null);
         setCurrentPage(1);
       }
     }, 300);
 
     return () => clearTimeout(timer);
-  }, [searchQuery, setCurrentPage]);
+  }, [localSearchQuery, searchQuery, setSearchQuery, setCurrentPage]);
 
   const fetchVideos = React.useCallback(async () => {
     setIsLoading(true);
@@ -92,8 +100,8 @@ export function DashboardClient({
         params.set('categoryId', selectedCategory);
       }
 
-      if (debouncedSearchQuery.trim()) {
-        params.set('search', debouncedSearchQuery.trim());
+      if (searchQuery?.trim()) {
+        params.set('search', searchQuery.trim());
       }
 
       const response = await fetch(`/api/youtube/videos?${params}`);
@@ -120,7 +128,7 @@ export function DashboardClient({
   }, [
     currentPage,
     selectedCategory,
-    debouncedSearchQuery,
+    searchQuery,
     limit,
     totalPages,
     setCurrentPage,
@@ -193,7 +201,8 @@ export function DashboardClient({
   };
 
   const getEmptyStateMessage = React.useMemo(() => {
-    const hasSearchQuery = debouncedSearchQuery.trim().length > 0;
+    const searchValue = searchQuery || '';
+    const hasSearchQuery = searchValue.trim().length > 0;
     const hasNoVideos = categoryCounts.all === 0;
 
     // If no videos at all, always prompt to sync first (even if searching)
@@ -209,7 +218,7 @@ export function DashboardClient({
     if (hasSearchQuery) {
       return {
         title: 'No videos found',
-        description: `No videos match "${debouncedSearchQuery}". Try a different search term or clear the search.`,
+        description: `No videos match "${searchValue}". Try a different search term or clear the search.`,
       };
     }
 
@@ -218,7 +227,7 @@ export function DashboardClient({
       title: 'No videos yet',
       description: 'No videos match the selected filter.',
     };
-  }, [debouncedSearchQuery, categoryCounts.all]);
+  }, [searchQuery, categoryCounts.all]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -293,9 +302,9 @@ export function DashboardClient({
             <Input
               type="search"
               placeholder="Search videos by title, description, or channel..."
-              value={searchQuery}
+              value={localSearchQuery}
               onChange={(e) => {
-                setSearchQuery(e.target.value);
+                setLocalSearchQuery(e.target.value);
               }}
               className="peer h-11 rounded-xl border-border/50 bg-background pl-11 pr-11 text-sm shadow-sm transition-all duration-200 focus:border-ring focus:bg-background focus:shadow-md"
               aria-label="Search videos by title, description, or channel"
@@ -305,13 +314,13 @@ export function DashboardClient({
               aria-hidden="true"
             />
             <AnimatePresence>
-              {searchQuery && (
+              {localSearchQuery && (
                 <motion.button
                   initial={{ opacity: 0, scale: 0.8 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.8 }}
                   onClick={() => {
-                    setSearchQuery('');
+                    setLocalSearchQuery('');
                   }}
                   className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-1.5 text-muted-foreground/60 transition-all duration-200 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   aria-label="Clear search"
