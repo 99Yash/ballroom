@@ -200,6 +200,44 @@ export function DashboardClient({
     }
   };
 
+  const getPageNumbers = React.useMemo(() => {
+    const pages: (number | 'ellipsis')[] = [];
+    const delta = 1; // Pages to show on each side of current page
+    const total = totalPages;
+    const current = currentPage;
+
+    if (total <= 7) {
+      // Show all pages if 7 or fewer
+      for (let i = 1; i <= total; i++) {
+        pages.push(i);
+      }
+    } else {
+      // Always show first page
+      pages.push(1);
+
+      if (current - delta > 2) {
+        pages.push('ellipsis');
+      }
+
+      // Show pages around current
+      const start = Math.max(2, current - delta);
+      const end = Math.min(total - 1, current + delta);
+
+      for (let i = start; i <= end; i++) {
+        pages.push(i);
+      }
+
+      if (current + delta < total - 1) {
+        pages.push('ellipsis');
+      }
+
+      // Always show last page
+      pages.push(total);
+    }
+
+    return pages;
+  }, [currentPage, totalPages]);
+
   const getEmptyStateMessage = React.useMemo(() => {
     const searchValue = searchQuery || '';
     const hasSearchQuery = searchValue.trim().length > 0;
@@ -306,29 +344,25 @@ export function DashboardClient({
               onChange={(e) => {
                 setLocalSearchQuery(e.target.value);
               }}
-              className="peer h-11 rounded-xl border-border/50 bg-background pl-11 pr-11 text-sm shadow-sm transition-all duration-200 focus:border-ring focus:bg-background focus:shadow-md"
+              className="peer h-11 rounded-xl border-border/50 bg-background pl-11 pr-11 text-sm shadow-sm transition-all duration-200 focus:border-ring focus:bg-background focus:shadow-md [&::-webkit-search-cancel-button]:hidden [&::-webkit-search-decoration]:hidden [&::-moz-search-clear-button]:hidden"
               aria-label="Search videos by title, description, or channel"
             />
             <Search
               className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/60 transition-colors duration-200 peer-focus-within:text-muted-foreground"
               aria-hidden="true"
             />
-            <AnimatePresence>
-              {localSearchQuery && (
-                <motion.button
-                  initial={{ opacity: 0, scale: 0.8 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.8 }}
-                  onClick={() => {
-                    setLocalSearchQuery('');
-                  }}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-1.5 text-muted-foreground/60 transition-all duration-200 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  aria-label="Clear search"
-                >
-                  <X className="h-4 w-4" />
-                </motion.button>
-              )}
-            </AnimatePresence>
+            {localSearchQuery && (
+              <button
+                onClick={() => {
+                  setLocalSearchQuery('');
+                }}
+                className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 cursor-pointer opacity-60 transition-opacity duration-200 hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded"
+                aria-label="Clear search"
+                type="button"
+              >
+                <X className="h-4 w-4 text-muted-foreground" />
+              </button>
+            )}
           </div>
         </motion.div>
 
@@ -425,78 +459,6 @@ export function DashboardClient({
                   />
                 ))}
               </div>
-
-              {totalPages > 1 && (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.85, y: 20 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.85, y: 20 }}
-                  transition={{
-                    duration: 0.5,
-                    delay: 0.2,
-                    type: 'spring',
-                    stiffness: 300,
-                    damping: 25,
-                  }}
-                  className="fixed bottom-6 left-1/2 z-30 -translate-x-1/2 sm:bottom-8"
-                >
-                  <motion.div
-                    layout
-                    className="flex items-center gap-1 rounded-full border-2 border-border bg-background/95 px-4 py-2.5 shadow-2xl shadow-black/20 backdrop-blur-xl supports-backdrop-filter:bg-background/90 dark:border-border/60 dark:bg-background/95 dark:shadow-black/40"
-                  >
-                    <motion.button
-                      whileHover={{ scale: 1.15 }}
-                      whileTap={{ scale: 0.9 }}
-                      onClick={() => {
-                        const page = Math.max(1, currentPage);
-                        const newPage = Math.max(1, page - 1);
-                        setCurrentPage(newPage);
-                      }}
-                      disabled={currentPage <= 1}
-                      className="flex h-8 w-8 items-center justify-center rounded-full text-foreground/80 transition-all hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-30"
-                      aria-label="Previous page"
-                    >
-                      <ChevronLeft className="h-4 w-4" />
-                    </motion.button>
-
-                    <motion.div
-                      key={currentPage}
-                      initial={{ opacity: 0, scale: 0.9 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      transition={{
-                        duration: 0.25,
-                        type: 'spring',
-                        stiffness: 400,
-                        damping: 25,
-                      }}
-                      className="mx-3 flex min-w-[60px] items-center justify-center"
-                    >
-                      <span className="text-sm font-semibold tabular-nums tracking-tight">
-                        <span className="text-foreground">{currentPage}</span>
-                        <span className="mx-1.5 text-muted-foreground/60">
-                          /
-                        </span>
-                        <span className="text-foreground/80">{totalPages}</span>
-                      </span>
-                    </motion.div>
-
-                    <motion.button
-                      whileHover={{ scale: 1.15 }}
-                      whileTap={{ scale: 0.9 }}
-                      onClick={() => {
-                        const page = Math.max(1, currentPage);
-                        const newPage = Math.min(totalPages, page + 1);
-                        setCurrentPage(newPage);
-                      }}
-                      disabled={currentPage >= totalPages}
-                      className="flex h-8 w-8 items-center justify-center rounded-full text-foreground/80 transition-all hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-30"
-                      aria-label="Next page"
-                    >
-                      <ChevronRight className="h-4 w-4" />
-                    </motion.button>
-                  </motion.div>
-                </motion.div>
-              )}
             </motion.div>
           ) : (
             <motion.div
@@ -524,6 +486,93 @@ export function DashboardClient({
             </motion.div>
           )}
         </AnimatePresence>
+
+        {totalPages > 1 && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.85, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.85, y: 20 }}
+            transition={{
+              duration: 0.5,
+              delay: 0.2,
+              type: 'spring',
+              stiffness: 300,
+              damping: 25,
+            }}
+            className="fixed bottom-6 left-1/2 z-30 -translate-x-1/2 sm:bottom-8"
+          >
+            <motion.div
+              layout
+              className="flex items-center gap-1 rounded-full border-2 border-border bg-background/95 px-2 py-2.5 shadow-2xl shadow-black/20 backdrop-blur-xl supports-backdrop-filter:bg-background/90 dark:border-border/60 dark:bg-background/95 dark:shadow-black/40"
+            >
+              <motion.button
+                whileHover={{ scale: 1.15 }}
+                whileTap={{ scale: 0.9 }}
+                onClick={() => {
+                  const page = Math.max(1, currentPage);
+                  const newPage = Math.max(1, page - 1);
+                  setCurrentPage(newPage);
+                }}
+                disabled={currentPage <= 1 || isLoading}
+                className="flex h-8 w-8 items-center justify-center rounded-full text-foreground/80 transition-all hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-30"
+                aria-label="Previous page"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </motion.button>
+
+              <div className="mx-1 flex items-center gap-0.5">
+                {getPageNumbers.map((page, index) => {
+                  if (page === 'ellipsis') {
+                    return (
+                      <span
+                        key={`ellipsis-${index}`}
+                        className="px-2 text-sm text-muted-foreground/60"
+                        aria-hidden="true"
+                      >
+                        ...
+                      </span>
+                    );
+                  }
+
+                  const isActive = page === currentPage;
+                  return (
+                    <motion.button
+                      key={page}
+                      whileHover={!isActive && !isLoading ? { scale: 1.1 } : undefined}
+                      whileTap={!isActive && !isLoading ? { scale: 0.95 } : undefined}
+                      onClick={() => !isLoading && setCurrentPage(page)}
+                      disabled={isLoading}
+                      className={`flex h-8 min-w-8 items-center justify-center rounded-full text-sm font-semibold tabular-nums transition-all ${
+                        isActive
+                          ? 'bg-primary text-primary-foreground shadow-sm'
+                          : 'text-foreground/80 hover:bg-muted hover:text-foreground'
+                      } ${isLoading ? 'disabled:opacity-50' : ''}`}
+                      aria-label={`Go to page ${page}`}
+                      aria-current={isActive ? 'page' : undefined}
+                    >
+                      {page}
+                    </motion.button>
+                  );
+                })}
+              </div>
+
+              <motion.button
+                whileHover={{ scale: 1.15 }}
+                whileTap={{ scale: 0.9 }}
+                onClick={() => {
+                  const page = Math.max(1, currentPage);
+                  const newPage = Math.min(totalPages, page + 1);
+                  setCurrentPage(newPage);
+                }}
+                disabled={currentPage >= totalPages || isLoading}
+                className="flex h-8 w-8 items-center justify-center rounded-full text-foreground/80 transition-all hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-30"
+                aria-label="Next page"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </motion.button>
+            </motion.div>
+          </motion.div>
+        )}
       </main>
     </div>
   );

@@ -36,14 +36,28 @@ export async function GET(request: Request) {
     let searchExpr: SQL | null = null;
     let searchRank: SQL | null = null;
     if (searchQuery && searchQuery.length > 0) {
-      const tsquery = sql`websearch_to_tsquery('simple', ${searchQuery})`;
+      // Build a prefix-matching tsquery by splitting words and appending :* to each
+      // This allows "bil" to match "bill", "billion", etc.
+      // Escape special tsquery characters: & | ! ( ) :
+      const words = searchQuery
+        .split(/\s+/)
+        .filter((w) => w.length > 0)
+        .map((w) => {
+          // Escape special characters in tsquery syntax
+          const escaped = w.replace(/([&|!():\\])/g, '\\$1');
+          return `${escaped}:*`;
+        })
+        .join(' & ');
+      
+      // Use to_tsquery with the built query string
+      // Drizzle's sql template will properly parameterize this, preventing SQL injection
+      const tsquery = sql`to_tsquery('simple', ${words})`;
       searchExpr = createVideoSearchVector(
         videos.title,
         videos.description,
         videos.channelName
       );
 
-      // websearch_to_tsquery always returns a valid tsquery (never NULL), so no need to check
       const searchCondition = sql`${searchExpr} @@ ${tsquery}`;
       baseConditions.push(searchCondition);
 
