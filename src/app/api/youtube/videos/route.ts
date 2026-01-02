@@ -43,7 +43,6 @@ export async function GET(request: Request) {
         .split(/\s+/)
         .filter((w) => w.length > 0)
         .map((w) => {
-          // Escape special characters in tsquery syntax
           const escaped = w.replace(/([&|!():\\])/g, '\\$1');
           return `${escaped}:*`;
         })

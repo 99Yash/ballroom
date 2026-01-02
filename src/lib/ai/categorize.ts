@@ -239,7 +239,6 @@ export async function categorizeUserVideos(
   userId: string,
   force: boolean = false
 ) {
-  // Get user's categories
   const userCategories = await db
     .select()
     .from(categories)

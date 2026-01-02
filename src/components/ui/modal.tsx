@@ -55,14 +55,12 @@ export function Modal({
     if (preventDefaultClose && !dragged) {
       return;
     }
-    // fire onClose event if provided
     onClose?.();
 
-    // if setShowModal is defined, use it to close modal
     if (setShowModal) {
       setShowModal(false);
-      // else, this is intercepting route @modal
     } else {
+      // Intercepting route @modal
       router.back();
     }
   };

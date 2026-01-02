@@ -83,7 +83,6 @@ export function DashboardClient({
       let page = Math.max(1, currentPage);
       if (totalPages > 0 && page > totalPages) {
         page = 1;
-        // Only update URL state if we're clamping the page
         if (currentPage !== 1) {
           setCurrentPage(1);
         }
@@ -207,19 +206,16 @@ export function DashboardClient({
     const current = currentPage;
 
     if (total <= 7) {
-      // Show all pages if 7 or fewer
       for (let i = 1; i <= total; i++) {
         pages.push(i);
       }
     } else {
-      // Always show first page
       pages.push(1);
 
       if (current - delta > 2) {
         pages.push('ellipsis');
       }
 
-      // Show pages around current
       const start = Math.max(2, current - delta);
       const end = Math.min(total - 1, current + delta);
 
@@ -231,7 +227,6 @@ export function DashboardClient({
         pages.push('ellipsis');
       }
 
-      // Always show last page
       pages.push(total);
     }
 
