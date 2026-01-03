@@ -177,9 +177,7 @@ export async function checkQuota(
 
     throw new AppError({
       code: 'QUOTA_EXCEEDED',
-      message:
-        `${quotaType === 'sync' ? 'Sync' : 'Categorization'} quota exceeded. ` +
-        `Used: ${quota.used}/${quota.limit}. Resets in ${daysUntilReset} days.`,
+      message: `${quotaType === 'sync' ? 'Sync' : 'Categorization'} quota exceeded. Used: ${quota.used}/${quota.limit}. Resets in ${daysUntilReset} days.`,
     });
   }
 
