@@ -19,16 +19,7 @@ export async function POST(request: Request) {
 
     const quotas = await getUserQuotas(session.user.id);
 
-    logger.api('POST', '/api/youtube/sync', {
-      userId: session.user.id,
-      duration: Date.now() - startTime,
-      status: 200,
-      mode,
-      synced: result.synced,
-      new: result.new,
-    });
-
-    return NextResponse.json({
+    const response = NextResponse.json({
       synced: result.synced,
       new: result.new,
       existing: result.existing,
@@ -40,6 +31,17 @@ export async function POST(request: Request) {
           : 'No new videos found',
       quota: formatQuotaForClient(quotas),
     });
+
+    logger.api('POST', '/api/youtube/sync', {
+      userId: session.user.id,
+      duration: Date.now() - startTime,
+      status: 200,
+      mode,
+      synced: result.synced,
+      new: result.new,
+    });
+
+    return response;
   } catch (error) {
     logger.error('Error syncing videos', error, {
       duration: Date.now() - startTime,

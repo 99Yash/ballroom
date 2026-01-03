@@ -71,13 +71,22 @@ export async function POST(request: Request) {
 
     if (videosToAnalyzeCount === 0) {
       const quotas = await getUserQuotas(session.user.id);
-      return NextResponse.json({
+      const response = NextResponse.json({
         categorized: 0,
         total: 0,
         skipped: 0,
         message: 'All videos are already categorized',
         quota: formatQuotaForClient(quotas),
       });
+
+      logger.api('POST', '/api/categorize', {
+        userId: session.user.id,
+        duration: Date.now() - startTime,
+        status: 200,
+        categorized: 0,
+      });
+
+      return response;
     }
 
     await checkQuota(session.user.id, 'categorize', videosToAnalyzeCount);
@@ -98,14 +107,7 @@ export async function POST(request: Request) {
 
     const quotas = await getUserQuotas(session.user.id);
 
-    logger.api('POST', '/api/categorize', {
-      userId: session.user.id,
-      duration: Date.now() - startTime,
-      status: 200,
-      categorized: result.categorized,
-    });
-
-    return NextResponse.json({
+    const response = NextResponse.json({
       categorized: result.categorized,
       total: result.total,
       skipped: result.skipped,
@@ -115,6 +117,15 @@ export async function POST(request: Request) {
           : 'All videos are already categorized',
       quota: formatQuotaForClient(quotas),
     });
+
+    logger.api('POST', '/api/categorize', {
+      userId: session.user.id,
+      duration: Date.now() - startTime,
+      status: 200,
+      categorized: result.categorized,
+    });
+
+    return response;
   } catch (error) {
     logger.error('Error categorizing videos', error, {
       duration: Date.now() - startTime,
