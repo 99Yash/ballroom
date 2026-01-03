@@ -63,6 +63,7 @@ export const APP_CONFIG = {
       paidLimit: 5_000,
     },
     resetDayOfMonth: 1,
+    warningThreshold: 80,
   },
 } as const;
 

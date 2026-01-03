@@ -17,6 +17,8 @@ const syncPayloadSchema = z.object({
 /**
  * Centralized error handler for sync workflow tasks.
  *
+ * **IMPORTANT: This function never returns normally. It always throws an error.**
+ *
  * Handles different error types with appropriate metadata, logging, and retry behavior.
  * Sets common metadata fields for all errors, then applies type-specific handling.
  *
@@ -42,6 +44,8 @@ const syncPayloadSchema = z.object({
  *
  * @throws {AbortTaskRunError} For AuthenticationError and QUOTA_EXCEEDED errors, preventing retries
  * @throws {Error} For retriable errors, re-throws the original error to trigger retry mechanism
+ *
+ * @returns {never} This function never returns normally - it always throws
  */
 function handleSyncError(
   error: unknown,
@@ -89,9 +93,13 @@ function handleSyncError(
   });
 
   // Re-throw the error to trigger Trigger.dev's retry mechanism
+  // All code paths must throw to satisfy the 'never' return type
   if (error instanceof Error) {
     throw error;
   }
+
+  // Fallback: convert non-Error values to Error
+  // This ensures TypeScript recognizes all code paths throw
   throw new Error(String(error));
 }
 

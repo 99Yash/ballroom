@@ -20,6 +20,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '~/components/ui/tooltip';
+import { APP_CONFIG } from '~/lib/constants';
 
 interface SyncButtonProps {
   onSyncComplete?: (result: { synced: number; new: number }) => void;
@@ -219,7 +220,8 @@ export function SyncButton({
     ? `${quota.categorize.remaining}/${quota.categorize.limit}`
     : null;
 
-  const isCategorizeQuotaLow = quota && quota.categorize.percentageUsed >= 80;
+  const isCategorizeQuotaLow =
+    quota && quota.categorize.percentageUsed >= APP_CONFIG.quota.warningThreshold;
   const isCategorizeQuotaExceeded = quota && quota.categorize.remaining <= 0;
 
   return (

@@ -1,4 +1,4 @@
-import { and, eq, inArray, notInArray, or, lt, isNull, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull, lt, notInArray, or, sql } from 'drizzle-orm';
 import { db } from '~/db';
 import { user, videos } from '~/db/schemas';
 import { APP_CONFIG, VIDEO_SYNC_STATUS } from './constants';
@@ -6,6 +6,13 @@ import { AppError } from './errors';
 import { logger } from './logger';
 import { checkQuota } from './quota';
 import { fetchLikedVideos, type YouTubeVideo } from './youtube';
+
+/**
+ * Type alias for the Drizzle transaction context.
+ * Extracts the transaction parameter type from db.transaction callback.
+ * This provides better type safety and readability than inline type extraction.
+ */
+type TransactionContext = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 export interface ProgressiveSyncOptions {
   initialLimit?: number;
@@ -99,7 +106,7 @@ const defaultOptions: Required<ProgressiveSyncOptions> = {
  *
  * @throws {AuthenticationError} If the user has no Google account linked or
  *   authentication tokens are missing/invalid
- * @throws {QuotaExceededError} If quota checking is enabled and the user has
+ * @throws {AppError with code 'QUOTA_EXCEEDED'} If quota checking is enabled and the user has
  *   exceeded their sync quota limit
  * @throws {Error} If video insertion fails after quota validation
  *
@@ -272,13 +279,23 @@ async function insertNewVideosAndIncrementQuota(
     );
 
     if (shouldIncrementQuota) {
-      await incrementQuotaInTransaction(tx, userId, 'sync', newVideos.length);
+      await incrementQuotaWithinTx(tx, userId, 'sync', newVideos.length);
     }
   });
 }
 
-async function incrementQuotaInTransaction(
-  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+/**
+ * Increments quota usage within a database transaction.
+ * This ensures quota updates are atomic with other operations (e.g., video insertion).
+ *
+ * @param tx - The transaction context from db.transaction
+ * @param userId - The user ID to increment quota for
+ * @param quotaType - Type of quota to increment ('sync' or 'categorize')
+ * @param amount - Amount to increment by (must be > 0)
+ * @throws {AppError} If user is not found (NOT_FOUND)
+ */
+async function incrementQuotaWithinTx(
+  tx: TransactionContext,
   userId: string,
   quotaType: 'sync' | 'categorize',
   amount: number

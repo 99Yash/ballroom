@@ -1,4 +1,4 @@
-import { and, eq, isNull, lt, or } from 'drizzle-orm';
+import { and, count, eq, isNull, lt, or } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
 import { db } from '~/db';
 import { categories, videos } from '~/db/schemas';
@@ -45,8 +45,10 @@ export async function POST(request: Request) {
       return updatedAt > latest ? updatedAt : latest;
     }, new Date(0));
 
-    const videosToAnalyzeCount = await db
-      .select({ id: videos.id })
+    // Use count() instead of selecting all IDs for better performance
+    // This avoids loading potentially thousands of IDs into memory
+    const videosToAnalyzeResult = await db
+      .select({ count: count() })
       .from(videos)
       .where(
         and(
@@ -62,7 +64,9 @@ export async function POST(request: Request) {
         )
       );
 
-    if (videosToAnalyzeCount.length === 0) {
+    const videosToAnalyzeCount = videosToAnalyzeResult[0]?.count ?? 0;
+
+    if (videosToAnalyzeCount === 0) {
       const quotas = await getUserQuotas(session.user.id);
       return NextResponse.json({
         categorized: 0,
@@ -73,19 +77,15 @@ export async function POST(request: Request) {
       });
     }
 
-    await checkQuota(
-      session.user.id,
-      'categorize',
-      videosToAnalyzeCount.length
-    );
+    await checkQuota(session.user.id, 'categorize', videosToAnalyzeCount);
 
     const result = await categorizeUserVideos(session.user.id, force);
 
     if (result.categorized > 0) {
-      if (result.categorized !== videosToAnalyzeCount.length) {
+      if (result.categorized !== videosToAnalyzeCount) {
         logger.warn('Mismatch between expected and actual categorized videos', {
           userId: session.user.id,
-          expected: videosToAnalyzeCount.length,
+          expected: videosToAnalyzeCount,
           actual: result.categorized,
         });
       }

@@ -24,7 +24,7 @@ export const updateCategorySchema = z.object({
 });
 
 export const syncVideosSchema = z.object({
-  mode: z.enum(['quick', 'extended']).optional().default('quick'),
+  mode: z.enum(['quick', 'extended']).default('quick'),
 });
 
 export const categorizeVideosSchema = z.object({

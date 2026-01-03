@@ -28,13 +28,20 @@ function createQuotaStatus(
   resetAt: Date | null
 ): QuotaStatus {
   const remaining = Math.max(0, limit - used);
+  let percentageUsed = 0;
+  if (limit > 0 && used > 0) {
+    const rawPercentage = (used / limit) * 100;
+    // Use Math.ceil to ensure small usage (e.g., 1/5000 = 0.02%) shows as at least 1%
+    // This prevents showing 0% when there's actual usage, improving UX for low usage
+    percentageUsed = Math.ceil(rawPercentage);
+  }
   return {
     used,
     limit,
     remaining,
     resetAt,
     isExceeded: used >= limit,
-    percentageUsed: limit > 0 ? Math.round((used / limit) * 100) : 0,
+    percentageUsed,
   };
 }
 
@@ -106,59 +113,49 @@ export async function getUserQuotas(userId: string): Promise<UserQuotas> {
   };
 }
 
+/**
+ * Checks if quota reset is needed and performs the reset atomically.
+ * Resets quota if:
+ * - User has no quotaResetAt date set, OR
+ * - Current date >= quotaResetAt date
+ *
+ * The WHERE clause ensures the update only happens when reset is needed,
+ * making this operation idempotent and safe to call multiple times.
+ *
+ * @param userId - The user ID to check and reset quota for
+ * @returns true if quota was reset, false if reset was not needed or user not found
+ */
 export async function checkAndResetQuotaIfNeeded(
   userId: string
 ): Promise<boolean> {
-  const [userData] = await db
-    .select({
-      id: user.id,
-      quotaResetAt: user.quotaResetAt,
-    })
-    .from(user)
-    .where(eq(user.id, userId))
-    .limit(1);
-
-  if (!userData) {
-    return false;
-  }
-
   const now = new Date();
-  const shouldReset = !userData.quotaResetAt || userData.quotaResetAt <= now;
+  const nextResetDate = getNextQuotaResetDate();
 
-  if (shouldReset) {
-    const nextResetDate = getNextQuotaResetDate();
+  const result = await db
+    .update(user)
+    .set({
+      syncQuotaUsed: 0,
+      categorizeQuotaUsed: 0,
+      quotaResetAt: nextResetDate,
+    })
+    .where(
+      and(
+        eq(user.id, userId),
+        or(isNull(user.quotaResetAt), sql`${user.quotaResetAt} <= ${now}`)
+      )
+    );
 
-    const result = await db
-      .update(user)
-      .set({
-        syncQuotaUsed: 0,
-        categorizeQuotaUsed: 0,
-        quotaResetAt: nextResetDate,
-      })
-      .where(
-        and(
-          eq(user.id, userId),
-          or(
-            isNull(user.quotaResetAt),
-            sql`${user.quotaResetAt} <= ${now}`
-          )
-        )
-      );
+  const rowsAffected = result.rowCount ?? 0;
+  const didReset = rowsAffected > 0;
 
-    const rowsAffected = result.rowCount ?? 0;
-    const didReset = rowsAffected > 0;
-
-    if (didReset) {
-      logger.info('Quota reset for user', {
-        userId,
-        nextResetAt: nextResetDate.toISOString(),
-      });
-    }
-
-    return didReset;
+  if (didReset) {
+    logger.info('Quota reset for user', {
+      userId,
+      nextResetAt: nextResetDate.toISOString(),
+    });
   }
 
-  return false;
+  return didReset;
 }
 
 export async function checkQuota(
