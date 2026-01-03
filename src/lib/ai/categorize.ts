@@ -6,7 +6,7 @@ import { db } from '~/db';
 import { categories, DatabaseVideo, videos } from '~/db/schemas';
 import { VIDEO_SYNC_STATUS } from '~/lib/constants';
 import { logger } from '~/lib/logger';
-import { incrementQuotaWithinTx } from '~/lib/quota';
+import { checkAndIncrementQuotaWithinTx } from '~/lib/quota';
 
 interface VideoForCategorization {
   id: string;
@@ -382,7 +382,7 @@ export async function categorizeUserVideos(
     );
 
     if (categorizedCountInTx > 0) {
-      await incrementQuotaWithinTx(
+      await checkAndIncrementQuotaWithinTx(
         tx,
         userId,
         'categorize',

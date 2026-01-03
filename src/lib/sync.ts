@@ -4,7 +4,7 @@ import { user, videos } from '~/db/schemas';
 import { APP_CONFIG, VIDEO_SYNC_STATUS } from './constants';
 import { AppError } from './errors';
 import { logger } from './logger';
-import { checkQuota } from './quota';
+import { checkAndIncrementQuotaWithinTx } from './quota';
 import { fetchLikedVideos, type YouTubeVideo } from './youtube';
 
 /**
@@ -183,10 +183,6 @@ export async function progressiveSync(
     totalExisting += batchExisting;
 
     if (newVideos.length > 0) {
-      if (opts.checkQuota) {
-        await checkQuota(userId, 'sync', newVideos.length);
-      }
-
       try {
         await insertNewVideosAndIncrementQuota(
           userId,
@@ -196,7 +192,7 @@ export async function progressiveSync(
         totalNew += newVideos.length;
         consecutiveExistingBatches = 0;
       } catch (error) {
-        logger.error('Failed to insert videos after quota check', {
+        logger.error('Failed to insert videos', {
           userId,
           videoCount: newVideos.length,
           error: error instanceof Error ? error.message : String(error),
@@ -256,7 +252,7 @@ export async function progressiveSync(
 async function insertNewVideosAndIncrementQuota(
   userId: string,
   newVideos: YouTubeVideo[],
-  shouldIncrementQuota: boolean
+  shouldCheckQuota: boolean
 ): Promise<void> {
   if (newVideos.length === 0) return;
 
@@ -278,57 +274,12 @@ async function insertNewVideosAndIncrementQuota(
       }))
     );
 
-    if (shouldIncrementQuota) {
-      await incrementQuotaWithinTx(tx, userId, 'sync', newVideos.length);
+    if (shouldCheckQuota) {
+      await checkAndIncrementQuotaWithinTx(tx, userId, 'sync', newVideos.length);
     }
   });
 }
 
-/**
- * Increments quota usage within a database transaction.
- * This ensures quota updates are atomic with other operations (e.g., video insertion).
- *
- * @param tx - The transaction context from db.transaction
- * @param userId - The user ID to increment quota for
- * @param quotaType - Type of quota to increment ('sync' or 'categorize')
- * @param amount - Amount to increment by (must be > 0)
- * @throws {AppError} If user is not found (NOT_FOUND)
- */
-async function incrementQuotaWithinTx(
-  tx: TransactionContext,
-  userId: string,
-  quotaType: 'sync' | 'categorize',
-  amount: number
-): Promise<void> {
-  if (amount <= 0) return;
-
-  const result = await tx
-    .update(user)
-    .set(
-      quotaType === 'sync'
-        ? {
-            syncQuotaUsed: sql`${user.syncQuotaUsed} + ${amount}`,
-          }
-        : {
-            categorizeQuotaUsed: sql`${user.categorizeQuotaUsed} + ${amount}`,
-          }
-    )
-    .where(eq(user.id, userId));
-
-  const rowsAffected = result.rowCount ?? 0;
-  if (rowsAffected === 0) {
-    throw new AppError({
-      code: 'NOT_FOUND',
-      message: `User not found: ${userId}`,
-    });
-  }
-
-  logger.debug('Quota incremented in transaction', {
-    userId,
-    quotaType,
-    amount,
-  });
-}
 
 async function updateLastSeenAt(
   userId: string,

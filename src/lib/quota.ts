@@ -198,8 +198,165 @@ export async function checkQuota(
 }
 
 /**
+ * Atomically checks and increments quota within a database transaction.
+ * This prevents race conditions by using a conditional UPDATE that only succeeds
+ * if the quota limit would not be exceeded. All operations happen within a single transaction.
+ *
+ * @param tx - The transaction context from db.transaction
+ * @param userId - The user ID to check and increment quota for
+ * @param quotaType - Type of quota to check and increment ('sync' or 'categorize')
+ * @param amount - Amount to increment by (must be > 0)
+ * @throws {AppError} If user is not found (NOT_FOUND) or quota would be exceeded (QUOTA_EXCEEDED)
+ */
+export async function checkAndIncrementQuotaWithinTx(
+  tx: TransactionContext,
+  userId: string,
+  quotaType: QuotaType,
+  amount: number
+): Promise<void> {
+  if (amount <= 0) return;
+
+  // First, check and reset quota if needed (within transaction)
+  const now = new Date();
+  const nextResetDate = getNextQuotaResetDate();
+
+  await tx
+    .update(user)
+    .set({
+      syncQuotaUsed: 0,
+      categorizeQuotaUsed: 0,
+      quotaResetAt: nextResetDate,
+    })
+    .where(
+      and(
+        eq(user.id, userId),
+        or(isNull(user.quotaResetAt), sql`${user.quotaResetAt} <= ${now}`)
+      )
+    );
+
+  // Read current quota values (within transaction for consistency)
+  const [userData] = await tx
+    .select({
+      syncQuotaUsed: user.syncQuotaUsed,
+      syncQuotaLimit: user.syncQuotaLimit,
+      categorizeQuotaUsed: user.categorizeQuotaUsed,
+      categorizeQuotaLimit: user.categorizeQuotaLimit,
+    })
+    .from(user)
+    .where(eq(user.id, userId))
+    .limit(1);
+
+  if (!userData) {
+    throw new AppError({
+      code: 'NOT_FOUND',
+      message: `User not found: ${userId}`,
+    });
+  }
+
+  // Check quota
+  const currentUsed =
+    quotaType === 'sync'
+      ? userData.syncQuotaUsed
+      : userData.categorizeQuotaUsed;
+  const limit =
+    quotaType === 'sync'
+      ? userData.syncQuotaLimit
+      : userData.categorizeQuotaLimit;
+
+  if (currentUsed + amount > limit) {
+    throw new AppError({
+      code: 'QUOTA_EXCEEDED',
+      message: `${
+        quotaType === 'sync' ? 'Sync' : 'Categorization'
+      } quota exceeded. Used: ${currentUsed}/${limit}. Resets monthly.`,
+    });
+  }
+
+  // Increment quota atomically with conditional WHERE clause
+  // This ensures the update only happens if quota hasn't changed
+  const result = await tx
+    .update(user)
+    .set(
+      quotaType === 'sync'
+        ? {
+            syncQuotaUsed: sql`${user.syncQuotaUsed} + ${amount}`,
+          }
+        : {
+            categorizeQuotaUsed: sql`${user.categorizeQuotaUsed} + ${amount}`,
+          }
+    )
+    .where(
+      and(
+        eq(user.id, userId),
+        // Additional safety check: ensure quota won't exceed limit
+        quotaType === 'sync'
+          ? sql`${user.syncQuotaUsed} + ${amount} <= ${user.syncQuotaLimit}`
+          : sql`${user.categorizeQuotaUsed} + ${amount} <= ${user.categorizeQuotaLimit}`
+      )
+    );
+
+  const rowsAffected = result.rowCount ?? 0;
+  if (rowsAffected === 0) {
+    // Could be user not found OR quota exceeded (race condition detected)
+    // Re-check to provide accurate error message
+    const [recheckData] = await tx
+      .select({
+        syncQuotaUsed: user.syncQuotaUsed,
+        syncQuotaLimit: user.syncQuotaLimit,
+        categorizeQuotaUsed: user.categorizeQuotaUsed,
+        categorizeQuotaLimit: user.categorizeQuotaLimit,
+      })
+      .from(user)
+      .where(eq(user.id, userId))
+      .limit(1);
+
+    if (!recheckData) {
+      throw new AppError({
+        code: 'NOT_FOUND',
+        message: `User not found: ${userId}`,
+      });
+    }
+
+    const recheckUsed =
+      quotaType === 'sync'
+        ? recheckData.syncQuotaUsed
+        : recheckData.categorizeQuotaUsed;
+    const recheckLimit =
+      quotaType === 'sync'
+        ? recheckData.syncQuotaLimit
+        : recheckData.categorizeQuotaLimit;
+
+    if (recheckUsed + amount > recheckLimit) {
+      throw new AppError({
+        code: 'QUOTA_EXCEEDED',
+        message: `${
+          quotaType === 'sync' ? 'Sync' : 'Categorization'
+        } quota exceeded. Used: ${recheckUsed}/${recheckLimit}. Resets monthly.`,
+      });
+    }
+
+    // If we get here, it's likely a race condition that was resolved
+    // Log it but don't throw - the quota check passed on recheck
+    logger.warn('Quota update race condition detected and resolved', {
+      userId,
+      quotaType,
+      amount,
+    });
+  }
+
+  logger.debug('Quota checked and incremented atomically in transaction', {
+    userId,
+    quotaType,
+    amount,
+    newUsed: currentUsed + amount,
+    limit,
+  });
+}
+
+/**
  * Increments quota usage within a database transaction.
  * This ensures quota updates are atomic with other operations (e.g., video categorization).
+ * NOTE: This function does NOT check quota limits. Use checkAndIncrementQuotaWithinTx for atomic check-and-increment.
  *
  * @param tx - The transaction context from db.transaction
  * @param userId - The user ID to increment quota for
