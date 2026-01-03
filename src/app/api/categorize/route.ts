@@ -84,23 +84,7 @@ export async function POST(request: Request) {
       return response;
     }
 
-    await checkQuota(session.user.id, 'categorize', videosToAnalyzeCount);
-
     const result = await categorizeUserVideos(session.user.id, force);
-
-    if (result.categorized > 0) {
-      if (result.categorized !== videosToAnalyzeCount) {
-        logger.warn('Mismatch between expected and actual categorized videos', {
-          userId: session.user.id,
-          expected: videosToAnalyzeCount,
-          actual: result.categorized,
-          force,
-          totalAnalyzed: result.total,
-          skipped: result.skipped,
-        });
-      }
-    }
-
     const quotas = await getUserQuotas(session.user.id);
 
     const response = NextResponse.json({
