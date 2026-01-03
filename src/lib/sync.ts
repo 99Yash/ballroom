@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNull, lt, notInArray, or, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull, lt, notInArray, or } from 'drizzle-orm';
 import { db } from '~/db';
 import { user, videos } from '~/db/schemas';
 import { APP_CONFIG, VIDEO_SYNC_STATUS } from './constants';
