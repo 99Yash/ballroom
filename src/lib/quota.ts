@@ -1,4 +1,5 @@
-import { eq } from 'drizzle-orm';
+import { lastDayOfMonth } from 'date-fns';
+import { and, eq, isNull, or, sql } from 'drizzle-orm';
 import { db } from '~/db';
 import { user } from '~/db/schemas';
 import { APP_CONFIG } from './constants';
@@ -41,10 +42,14 @@ function getNextQuotaResetDate(): Date {
   const now = new Date();
   const resetDay = APP_CONFIG.quota.resetDayOfMonth;
 
+  const targetMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const lastDayOfTargetMonth = lastDayOfMonth(targetMonth);
+  const safeResetDay = Math.min(resetDay, lastDayOfTargetMonth.getDate());
+
   let resetDate = new Date(
     now.getFullYear(),
     now.getMonth(),
-    resetDay,
+    safeResetDay,
     0,
     0,
     0,
@@ -52,10 +57,14 @@ function getNextQuotaResetDate(): Date {
   );
 
   if (now >= resetDate) {
+    const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    const lastDayOfNextMonth = lastDayOfMonth(nextMonth);
+    const safeNextResetDay = Math.min(resetDay, lastDayOfNextMonth.getDate());
+
     resetDate = new Date(
       now.getFullYear(),
       now.getMonth() + 1,
-      resetDay,
+      safeNextResetDay,
       0,
       0,
       0,
@@ -102,6 +111,7 @@ export async function checkAndResetQuotaIfNeeded(
 ): Promise<boolean> {
   const [userData] = await db
     .select({
+      id: user.id,
       quotaResetAt: user.quotaResetAt,
     })
     .from(user)
@@ -118,20 +128,34 @@ export async function checkAndResetQuotaIfNeeded(
   if (shouldReset) {
     const nextResetDate = getNextQuotaResetDate();
 
-    await db
+    const result = await db
       .update(user)
       .set({
         syncQuotaUsed: 0,
         categorizeQuotaUsed: 0,
         quotaResetAt: nextResetDate,
       })
-      .where(eq(user.id, userId));
+      .where(
+        and(
+          eq(user.id, userId),
+          or(
+            isNull(user.quotaResetAt),
+            sql`${user.quotaResetAt} <= ${now}`
+          )
+        )
+      );
 
-    logger.info('Quota reset for user', {
-      userId,
-      nextResetAt: nextResetDate.toISOString(),
-    });
-    return true;
+    const rowsAffected = result.rowCount ?? 0;
+    const didReset = rowsAffected > 0;
+
+    if (didReset) {
+      logger.info('Quota reset for user', {
+        userId,
+        nextResetAt: nextResetDate.toISOString(),
+      });
+    }
+
+    return didReset;
   }
 
   return false;
@@ -172,28 +196,27 @@ export async function incrementQuota(
 ): Promise<void> {
   if (amount <= 0) return;
 
-  const field = quotaType === 'sync' ? 'syncQuotaUsed' : 'categorizeQuotaUsed';
+  const column =
+    quotaType === 'sync' ? user.syncQuotaUsed : user.categorizeQuotaUsed;
+  const fieldName =
+    quotaType === 'sync' ? 'syncQuotaUsed' : 'categorizeQuotaUsed';
 
-  const [userData] = await db
-    .select({ currentUsage: user[field] })
-    .from(user)
-    .where(eq(user.id, userId))
-    .limit(1);
+  const result = await db
+    .update(user)
+    .set({
+      [fieldName]: sql`${column} + ${amount}`,
+    })
+    .where(eq(user.id, userId));
 
-  if (!userData) {
+  const rowsAffected = result.rowCount ?? 0;
+  if (rowsAffected === 0) {
     throw new AppError({ code: 'NOT_FOUND', message: 'User not found' });
   }
-
-  await db
-    .update(user)
-    .set({ [field]: userData.currentUsage + amount })
-    .where(eq(user.id, userId));
 
   logger.debug('Quota incremented', {
     userId,
     quotaType,
     amount,
-    newTotal: userData.currentUsage + amount,
   });
 }
 

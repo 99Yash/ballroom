@@ -80,8 +80,6 @@ async function createYouTubeClient(userId: string) {
         userId,
         accountId: acc.id,
       });
-      // Note: Consider implementing retry logic or alerting for production
-      // Throwing here would interrupt the OAuth flow, so we log instead
     }
   });
 

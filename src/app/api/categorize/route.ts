@@ -81,7 +81,17 @@ export async function POST(request: Request) {
 
     const result = await categorizeUserVideos(session.user.id, force);
 
-    await incrementQuota(session.user.id, 'categorize', result.categorized);
+    if (result.categorized > 0) {
+      if (result.categorized !== videosToAnalyzeCount.length) {
+        logger.warn('Mismatch between expected and actual categorized videos', {
+          userId: session.user.id,
+          expected: videosToAnalyzeCount.length,
+          actual: result.categorized,
+        });
+      }
+
+      await incrementQuota(session.user.id, 'categorize', result.categorized);
+    }
 
     const quotas = await getUserQuotas(session.user.id);
 

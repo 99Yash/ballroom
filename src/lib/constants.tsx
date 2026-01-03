@@ -51,6 +51,7 @@ export const APP_CONFIG = {
     quickSyncLimit: 50,
     extendedSyncLimit: 500,
     batchSize: 50,
+    lastSeenAtUpdateThresholdMs: 60 * 60 * 1000, // 1 hour
   },
   quota: {
     sync: {

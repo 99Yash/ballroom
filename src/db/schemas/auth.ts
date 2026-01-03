@@ -6,7 +6,6 @@ import {
   text,
   timestamp,
 } from 'drizzle-orm/pg-core';
-import { APP_CONFIG } from '~/lib/constants';
 import { lifecycle_dates } from './helpers';
 
 export const user = pgTable(
@@ -19,13 +18,13 @@ export const user = pgTable(
     image: text('image'),
     onboardedAt: timestamp('onboarded_at'),
     // Quota tracking
+    // Note: Default values are hardcoded here to avoid tight coupling with application config.
+    // If quota limits need to change, handle through application logic or migrations.
     syncQuotaUsed: integer('sync_quota_used').default(0).notNull(),
-    syncQuotaLimit: integer('sync_quota_limit')
-      .default(APP_CONFIG.quota.sync.freeLimit)
-      .notNull(),
+    syncQuotaLimit: integer('sync_quota_limit').default(5_000).notNull(),
     categorizeQuotaUsed: integer('categorize_quota_used').default(0).notNull(),
     categorizeQuotaLimit: integer('categorize_quota_limit')
-      .default(APP_CONFIG.quota.categorize.freeLimit)
+      .default(500)
       .notNull(),
     quotaResetAt: timestamp('quota_reset_at'),
     ...lifecycle_dates,
