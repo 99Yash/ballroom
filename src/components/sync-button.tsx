@@ -238,8 +238,10 @@ export function SyncButton({
             ) : (
               <RefreshCWIcon size={16} />
             )}
-            <span className="hidden sm:inline">Sync Videos</span>
-            <span className="sm:hidden">Sync</span>
+            <span className="hidden sm:inline">
+              Sync Videos (no auto categorize)
+            </span>
+            <span className="sm:hidden">Sync Only</span>
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
