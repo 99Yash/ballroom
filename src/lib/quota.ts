@@ -8,6 +8,15 @@ import { logger } from './logger';
 
 export type QuotaType = 'sync' | 'categorize';
 
+/**
+ * Type alias for the Drizzle transaction context.
+ * Extracts the transaction parameter type from db.transaction callback.
+ * This provides better type safety and readability than inline type extraction.
+ */
+export type TransactionContext = Parameters<
+  Parameters<typeof db.transaction>[0]
+>[0];
+
 export interface QuotaStatus {
   used: number;
   limit: number;
@@ -177,11 +186,61 @@ export async function checkQuota(
 
     throw new AppError({
       code: 'QUOTA_EXCEEDED',
-      message: `${quotaType === 'sync' ? 'Sync' : 'Categorization'} quota exceeded. Used: ${quota.used}/${quota.limit}. Resets in ${daysUntilReset} days.`,
+      message: `${
+        quotaType === 'sync' ? 'Sync' : 'Categorization'
+      } quota exceeded. Used: ${quota.used}/${
+        quota.limit
+      }. Resets in ${daysUntilReset} days.`,
     });
   }
 
   return quota;
+}
+
+/**
+ * Increments quota usage within a database transaction.
+ * This ensures quota updates are atomic with other operations (e.g., video categorization).
+ *
+ * @param tx - The transaction context from db.transaction
+ * @param userId - The user ID to increment quota for
+ * @param quotaType - Type of quota to increment ('sync' or 'categorize')
+ * @param amount - Amount to increment by (must be > 0)
+ * @throws {AppError} If user is not found (NOT_FOUND)
+ */
+export async function incrementQuotaWithinTx(
+  tx: TransactionContext,
+  userId: string,
+  quotaType: QuotaType,
+  amount: number
+): Promise<void> {
+  if (amount <= 0) return;
+
+  const result = await tx
+    .update(user)
+    .set(
+      quotaType === 'sync'
+        ? {
+            syncQuotaUsed: sql`${user.syncQuotaUsed} + ${amount}`,
+          }
+        : {
+            categorizeQuotaUsed: sql`${user.categorizeQuotaUsed} + ${amount}`,
+          }
+    )
+    .where(eq(user.id, userId));
+
+  const rowsAffected = result.rowCount ?? 0;
+  if (rowsAffected === 0) {
+    throw new AppError({
+      code: 'NOT_FOUND',
+      message: `User not found: ${userId}`,
+    });
+  }
+
+  logger.debug('Quota incremented in transaction', {
+    userId,
+    quotaType,
+    amount,
+  });
 }
 
 export async function incrementQuota(

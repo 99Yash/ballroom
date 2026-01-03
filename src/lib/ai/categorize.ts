@@ -6,6 +6,7 @@ import { db } from '~/db';
 import { categories, DatabaseVideo, videos } from '~/db/schemas';
 import { VIDEO_SYNC_STATUS } from '~/lib/constants';
 import { logger } from '~/lib/logger';
+import { incrementQuotaWithinTx } from '~/lib/quota';
 
 interface VideoForCategorization {
   id: string;
@@ -358,7 +359,6 @@ export async function categorizeUserVideos(
             .where(inArray(videos.id, chunk))
         );
       }
-      categorizedCount += videoIds.length;
     }
 
     if (uncategorizedVideoIds.length > 0) {
@@ -375,6 +375,22 @@ export async function categorizeUserVideos(
     }
 
     await Promise.all(updatePromises);
+
+    const categorizedCountInTx = Array.from(updatesByCategory.values()).reduce(
+      (sum, videoIds) => sum + videoIds.length,
+      0
+    );
+
+    if (categorizedCountInTx > 0) {
+      await incrementQuotaWithinTx(
+        tx,
+        userId,
+        'categorize',
+        categorizedCountInTx
+      );
+    }
+
+    categorizedCount = categorizedCountInTx;
   });
 
   logger.info('Categorized user videos', {
