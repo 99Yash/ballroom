@@ -302,16 +302,17 @@ async function incrementQuotaWithinTx(
 ): Promise<void> {
   if (amount <= 0) return;
 
-  const column =
-    quotaType === 'sync' ? user.syncQuotaUsed : user.categorizeQuotaUsed;
-  const fieldName =
-    quotaType === 'sync' ? 'syncQuotaUsed' : 'categorizeQuotaUsed';
-
   const result = await tx
     .update(user)
-    .set({
-      [fieldName]: sql`${column} + ${amount}`,
-    })
+    .set(
+      quotaType === 'sync'
+        ? {
+            syncQuotaUsed: sql`${user.syncQuotaUsed} + ${amount}`,
+          }
+        : {
+            categorizeQuotaUsed: sql`${user.categorizeQuotaUsed} + ${amount}`,
+          }
+    )
     .where(eq(user.id, userId));
 
   const rowsAffected = result.rowCount ?? 0;
