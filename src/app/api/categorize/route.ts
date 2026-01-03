@@ -51,17 +51,20 @@ export async function POST(request: Request) {
       .select({ count: count() })
       .from(videos)
       .where(
-        and(
-          eq(videos.userId, session.user.id),
-          eq(videos.syncStatus, VIDEO_SYNC_STATUS.ACTIVE),
-          force
-            ? undefined
-            : or(
+        force
+          ? and(
+              eq(videos.userId, session.user.id),
+              eq(videos.syncStatus, VIDEO_SYNC_STATUS.ACTIVE)
+            )
+          : and(
+              eq(videos.userId, session.user.id),
+              eq(videos.syncStatus, VIDEO_SYNC_STATUS.ACTIVE),
+              or(
                 isNull(videos.categoryId),
                 isNull(videos.lastAnalyzedAt),
                 lt(videos.lastAnalyzedAt, latestCategoryUpdate)
               )
-        )
+            )
       );
 
     const videosToAnalyzeCount = videosToAnalyzeResult[0]?.count ?? 0;
