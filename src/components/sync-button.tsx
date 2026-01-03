@@ -240,7 +240,7 @@ export function SyncButton({
               <RefreshCWIcon size={16} />
             )}
             <span className="hidden sm:inline">
-              Sync Videos (no auto categorize)
+              Sync Videos (no auto-categorization)
             </span>
             <span className="sm:hidden">Sync Only</span>
           </Button>
