@@ -193,15 +193,32 @@ export async function incrementQuota(
 ): Promise<void> {
   if (amount <= 0) return;
 
-  const column =
-    quotaType === 'sync' ? user.syncQuotaUsed : user.categorizeQuotaUsed;
-  const fieldName =
-    quotaType === 'sync' ? 'syncQuotaUsed' : 'categorizeQuotaUsed';
+  if (quotaType === 'sync') {
+    const result = await db
+      .update(user)
+      .set({
+        syncQuotaUsed: sql`${user.syncQuotaUsed} + ${amount}`,
+      })
+      .where(eq(user.id, userId));
+
+    const rowsAffected = result.rowCount ?? 0;
+    if (rowsAffected === 0) {
+      throw new AppError({ code: 'NOT_FOUND', message: 'User not found' });
+    }
+
+    logger.debug('Quota incremented', {
+      userId,
+      quotaType,
+      amount,
+    });
+
+    return;
+  }
 
   const result = await db
     .update(user)
     .set({
-      [fieldName]: sql`${column} + ${amount}`,
+      categorizeQuotaUsed: sql`${user.categorizeQuotaUsed} + ${amount}`,
     })
     .where(eq(user.id, userId));
 
