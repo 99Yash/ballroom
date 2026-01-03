@@ -99,6 +99,9 @@ export async function POST(request: Request) {
           userId: session.user.id,
           expected: videosToAnalyzeCount,
           actual: result.categorized,
+          force,
+          totalAnalyzed: result.total,
+          skipped: result.skipped,
         });
       }
 
