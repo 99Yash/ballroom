@@ -289,15 +289,7 @@ export async function checkAndIncrementQuotaWithinTx(
   // This ensures the update only happens if quota hasn't changed
   const result = await tx
     .update(user)
-    .set(
-      quotaType === 'sync'
-        ? {
-            syncQuotaUsed: sql`${user.syncQuotaUsed} + ${amount}`,
-          }
-        : {
-            categorizeQuotaUsed: sql`${user.categorizeQuotaUsed} + ${amount}`,
-          }
-    )
+    .set(buildQuotaIncrementUpdate(quotaType, amount))
     .where(
       and(
         eq(user.id, userId),
@@ -367,6 +359,19 @@ export async function checkAndIncrementQuotaWithinTx(
 }
 
 /**
+ * Helper function to build the quota increment update object based on quota type.
+ * Returns the appropriate Drizzle update object for the given quota type.
+ */
+function buildQuotaIncrementUpdate(
+  quotaType: QuotaType,
+  amount: number
+): Record<string, ReturnType<typeof sql>> {
+  return quotaType === 'sync'
+    ? { syncQuotaUsed: sql`${user.syncQuotaUsed} + ${amount}` }
+    : { categorizeQuotaUsed: sql`${user.categorizeQuotaUsed} + ${amount}` };
+}
+
+/**
  * Increments quota usage within a database transaction.
  * This ensures quota updates are atomic with other operations (e.g., video categorization).
  * NOTE: This function does NOT check quota limits. Use checkAndIncrementQuotaWithinTx for atomic check-and-increment.
@@ -393,15 +398,7 @@ export async function incrementQuotaWithinTx(
 
   const result = await tx
     .update(user)
-    .set(
-      quotaType === 'sync'
-        ? {
-            syncQuotaUsed: sql`${user.syncQuotaUsed} + ${amount}`,
-          }
-        : {
-            categorizeQuotaUsed: sql`${user.categorizeQuotaUsed} + ${amount}`,
-          }
-    )
+    .set(buildQuotaIncrementUpdate(quotaType, amount))
     .where(eq(user.id, userId));
 
   const rowsAffected = result.rowCount ?? 0;
@@ -441,33 +438,9 @@ export async function incrementQuota(
   }
   if (amount === 0) return;
 
-  if (quotaType === 'sync') {
-    const result = await db
-      .update(user)
-      .set({
-        syncQuotaUsed: sql`${user.syncQuotaUsed} + ${amount}`,
-      })
-      .where(eq(user.id, userId));
-
-    const rowsAffected = result.rowCount ?? 0;
-    if (rowsAffected === 0) {
-      throw new AppError({ code: 'NOT_FOUND', message: 'User not found' });
-    }
-
-    logger.debug('Quota incremented', {
-      userId,
-      quotaType,
-      amount,
-    });
-
-    return;
-  }
-
   const result = await db
     .update(user)
-    .set({
-      categorizeQuotaUsed: sql`${user.categorizeQuotaUsed} + ${amount}`,
-    })
+    .set(buildQuotaIncrementUpdate(quotaType, amount))
     .where(eq(user.id, userId));
 
   const rowsAffected = result.rowCount ?? 0;
