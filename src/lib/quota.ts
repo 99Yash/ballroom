@@ -2,20 +2,12 @@ import { lastDayOfMonth } from 'date-fns';
 import { and, eq, isNull, or, sql } from 'drizzle-orm';
 import { db } from '~/db';
 import { user } from '~/db/schemas';
+import type { TransactionContext } from '~/db/types';
 import { APP_CONFIG } from './constants';
 import { AppError } from './errors';
 import { logger } from './logger';
 
 export type QuotaType = 'sync' | 'categorize';
-
-/**
- * Type alias for the Drizzle transaction context.
- * Extracts the transaction parameter type from db.transaction callback.
- * This provides better type safety and readability than inline type extraction.
- */
-export type TransactionContext = Parameters<
-  Parameters<typeof db.transaction>[0]
->[0];
 
 export interface QuotaStatus {
   used: number;
@@ -37,19 +29,34 @@ function createQuotaStatus(
   resetAt: Date | null
 ): QuotaStatus {
   const remaining = Math.max(0, limit - used);
+  const isExceeded = used >= limit;
   let percentageUsed = 0;
   if (limit > 0 && used > 0) {
     const rawPercentage = (used / limit) * 100;
-    // Use Math.ceil to ensure small usage (e.g., 1/5000 = 0.02%) shows as at least 1%
+
+    // Use Math.round for accurate representation
+    let rounded = Math.round(rawPercentage);
+
+    // Ensure small usage (e.g., 1/5000 = 0.02%) shows as at least 1%
     // This prevents showing 0% when there's actual usage, improving UX for low usage
-    percentageUsed = Math.ceil(rawPercentage);
+    if (rounded === 0 && rawPercentage > 0) {
+      rounded = 1;
+    }
+
+    // Cap at 99% if not exceeded to avoid showing 100% when quota is still available
+    // Only show 100% when actually exceeded
+    if (!isExceeded && rounded >= 100) {
+      rounded = 99;
+    }
+
+    percentageUsed = rounded;
   }
   return {
     used,
     limit,
     remaining,
     resetAt,
-    isExceeded: used >= limit,
+    isExceeded,
     percentageUsed,
   };
 }
@@ -205,8 +212,8 @@ export async function checkQuota(
  * @param tx - The transaction context from db.transaction
  * @param userId - The user ID to check and increment quota for
  * @param quotaType - Type of quota to check and increment ('sync' or 'categorize')
- * @param amount - Amount to increment by (must be > 0)
- * @throws {AppError} If user is not found (NOT_FOUND) or quota would be exceeded (QUOTA_EXCEEDED)
+ * @param amount - Amount to increment by. Zero values are silently ignored (no-op). Negative values throw an error.
+ * @throws {AppError} If user is not found (NOT_FOUND), quota would be exceeded (QUOTA_EXCEEDED), or amount is negative (BAD_REQUEST)
  */
 export async function checkAndIncrementQuotaWithinTx(
   tx: TransactionContext,
@@ -214,7 +221,13 @@ export async function checkAndIncrementQuotaWithinTx(
   quotaType: QuotaType,
   amount: number
 ): Promise<void> {
-  if (amount <= 0) return;
+  if (amount < 0) {
+    throw new AppError({
+      code: 'BAD_REQUEST',
+      message: `Invalid quota amount: ${amount}. Amount must be non-negative.`,
+    });
+  }
+  if (amount === 0) return;
 
   // First, check and reset quota if needed (within transaction)
   const now = new Date();
@@ -361,8 +374,8 @@ export async function checkAndIncrementQuotaWithinTx(
  * @param tx - The transaction context from db.transaction
  * @param userId - The user ID to increment quota for
  * @param quotaType - Type of quota to increment ('sync' or 'categorize')
- * @param amount - Amount to increment by (must be > 0)
- * @throws {AppError} If user is not found (NOT_FOUND)
+ * @param amount - Amount to increment by. Zero values are silently ignored (no-op). Negative values throw an error.
+ * @throws {AppError} If user is not found (NOT_FOUND) or amount is negative (BAD_REQUEST)
  */
 export async function incrementQuotaWithinTx(
   tx: TransactionContext,
@@ -370,7 +383,13 @@ export async function incrementQuotaWithinTx(
   quotaType: QuotaType,
   amount: number
 ): Promise<void> {
-  if (amount <= 0) return;
+  if (amount < 0) {
+    throw new AppError({
+      code: 'BAD_REQUEST',
+      message: `Invalid quota amount: ${amount}. Amount must be non-negative.`,
+    });
+  }
+  if (amount === 0) return;
 
   const result = await tx
     .update(user)
@@ -400,12 +419,27 @@ export async function incrementQuotaWithinTx(
   });
 }
 
+/**
+ * Increments quota usage outside of a transaction.
+ * NOTE: This function does NOT check quota limits. Use checkQuota before calling if limits should be enforced.
+ *
+ * @param userId - The user ID to increment quota for
+ * @param quotaType - Type of quota to increment ('sync' or 'categorize')
+ * @param amount - Amount to increment by. Zero values are silently ignored (no-op). Negative values throw an error.
+ * @throws {AppError} If user is not found (NOT_FOUND) or amount is negative (BAD_REQUEST)
+ */
 export async function incrementQuota(
   userId: string,
   quotaType: QuotaType,
   amount: number
 ): Promise<void> {
-  if (amount <= 0) return;
+  if (amount < 0) {
+    throw new AppError({
+      code: 'BAD_REQUEST',
+      message: `Invalid quota amount: ${amount}. Amount must be non-negative.`,
+    });
+  }
+  if (amount === 0) return;
 
   if (quotaType === 'sync') {
     const result = await db

@@ -1,18 +1,10 @@
 import { and, eq, inArray, isNull, lt, notInArray, or } from 'drizzle-orm';
 import { db } from '~/db';
-import { user, videos } from '~/db/schemas';
+import { videos } from '~/db/schemas';
 import { APP_CONFIG, VIDEO_SYNC_STATUS } from './constants';
-import { AppError } from './errors';
 import { logger } from './logger';
 import { checkAndIncrementQuotaWithinTx } from './quota';
 import { fetchLikedVideos, type YouTubeVideo } from './youtube';
-
-/**
- * Type alias for the Drizzle transaction context.
- * Extracts the transaction parameter type from db.transaction callback.
- * This provides better type safety and readability than inline type extraction.
- */
-type TransactionContext = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 export interface ProgressiveSyncOptions {
   initialLimit?: number;
@@ -275,11 +267,15 @@ async function insertNewVideosAndIncrementQuota(
     );
 
     if (shouldCheckQuota) {
-      await checkAndIncrementQuotaWithinTx(tx, userId, 'sync', newVideos.length);
+      await checkAndIncrementQuotaWithinTx(
+        tx,
+        userId,
+        'sync',
+        newVideos.length
+      );
     }
   });
 }
-
 
 async function updateLastSeenAt(
   userId: string,
