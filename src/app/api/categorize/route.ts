@@ -13,6 +13,7 @@ import {
 } from '~/lib/quota';
 import {
   categorizeVideosSchema,
+  parseRequestBody,
   validateRequestBody,
 } from '~/lib/validations/api';
 
@@ -20,8 +21,7 @@ export async function POST(request: Request) {
   const startTime = Date.now();
   try {
     const session = await requireSession();
-    const body = await request.json().catch(() => ({}));
-
+    const body = await parseRequestBody(request);
     const { force } = validateRequestBody(categorizeVideosSchema, body);
 
     const userCategories = await db
@@ -37,7 +37,6 @@ export async function POST(request: Request) {
       });
     }
 
-    // Check quota status early for consistency
     await checkAndResetQuotaIfNeeded(session.user.id);
     let quotas = null;
     let quotaFetchFailed = false;
@@ -48,7 +47,6 @@ export async function POST(request: Request) {
       logger.warn('Failed to fetch quotas', { quotaError });
     }
 
-    // Validate quota before processing videos
     if (quotas?.categorize.isExceeded) {
       const daysUntilReset = quotas.categorize.resetAt
         ? Math.ceil(
@@ -63,11 +61,8 @@ export async function POST(request: Request) {
       });
     }
 
-    // categorizeUserVideos now handles the video fetching internally
-    // This eliminates the duplicate COUNT query that was previously done here
     const result = await categorizeUserVideos(session.user.id, force);
 
-    // Handle early return if no videos to categorize
     if (result.total === 0) {
       const quotaExceeded = quotas?.categorize.isExceeded ?? false;
       const message = quotaExceeded
@@ -94,10 +89,8 @@ export async function POST(request: Request) {
       return response;
     }
 
-    // Refresh quotas after categorization (in case they changed)
     try {
       quotas = await getUserQuotas(session.user.id);
-      // Reset flag if post-categorization fetch succeeds
       quotaFetchFailed = false;
     } catch (quotaError) {
       quotaFetchFailed = true;

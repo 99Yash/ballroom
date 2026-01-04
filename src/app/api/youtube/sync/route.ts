@@ -4,14 +4,17 @@ import { createErrorResponse } from '~/lib/errors';
 import { logger } from '~/lib/logger';
 import { formatQuotaForClient, getUserQuotas } from '~/lib/quota';
 import { extendedSync, quickSync } from '~/lib/sync';
-import { syncVideosSchema, validateRequestBody } from '~/lib/validations/api';
+import {
+  parseRequestBody,
+  syncVideosSchema,
+  validateRequestBody,
+} from '~/lib/validations/api';
 
 export async function POST(request: Request) {
   const startTime = Date.now();
   try {
     const session = await requireSession();
-    const body = await request.json().catch(() => ({}));
-
+    const body = await parseRequestBody(request);
     const { mode } = validateRequestBody(syncVideosSchema, body);
 
     const syncFn = mode === 'extended' ? extendedSync : quickSync;

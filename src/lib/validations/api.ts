@@ -1,4 +1,5 @@
 import * as z from 'zod/v4';
+import { AppError } from '~/lib/errors';
 import { createValidationError } from '~/lib/utils';
 
 /**
@@ -43,6 +44,24 @@ export const completeOnboardingSchema = z.object({
     .min(1, 'At least one category is required')
     .max(20, 'Cannot create more than 20 categories'),
 });
+
+/**
+ * Safely parse JSON from a Request body
+ * Handles parsing errors with proper error responses
+ */
+export async function parseRequestBody(
+  request: Request
+): Promise<unknown> {
+  try {
+    return await request.json();
+  } catch (parseError) {
+    throw new AppError({
+      code: 'BAD_REQUEST',
+      message: 'Invalid JSON in request body',
+      cause: parseError,
+    });
+  }
+}
 
 /**
  * Type-safe validation helper

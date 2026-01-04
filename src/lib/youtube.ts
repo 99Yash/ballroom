@@ -4,7 +4,11 @@ import { OAuth2Client } from 'google-auth-library';
 import { db } from '~/db';
 import { account } from '~/db/schemas';
 import { env } from '~/lib/env';
-import { AUTH_ERROR_TYPES, AuthenticationError } from '~/lib/errors';
+import {
+  AUTH_ERROR_TYPES,
+  AppError,
+  AuthenticationError,
+} from '~/lib/errors';
 import { logger } from '~/lib/logger';
 
 export interface YouTubeVideo {
@@ -63,8 +67,15 @@ async function createYouTubeClient(userId: string) {
   });
 
   oauth2Client.on('tokens', async (tokens) => {
-    try {
-      if (tokens.access_token) {
+    if (!tokens.access_token) {
+      return;
+    }
+
+    const maxRetries = 3;
+    let lastError: unknown;
+
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
         await db
           .update(account)
           .set({
@@ -74,19 +85,43 @@ async function createYouTubeClient(userId: string) {
               : undefined,
           })
           .where(eq(account.id, acc.id));
+
+        if (attempt > 0) {
+          logger.info('Successfully persisted refreshed token after retry', {
+            userId,
+            accountId: acc.id,
+            attempt: attempt + 1,
+          });
+        }
+        return;
+      } catch (error) {
+        lastError = error;
+
+        if (attempt === maxRetries - 1) {
+          break;
+        }
+
+        const delayMs = 100 * Math.pow(2, attempt);
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+
+        logger.warn('Failed to persist refreshed token, retrying', {
+          userId,
+          accountId: acc.id,
+          attempt: attempt + 1,
+          maxRetries,
+          delayMs,
+          error: error instanceof Error ? error.message : String(error),
+        });
       }
-    } catch (error) {
-      // Production consideration: Token refresh persistence failures are logged but not retried
-      // to avoid interrupting the OAuth flow. If persistence fails, the new token is lost and
-      // the user will need to re-authenticate on the next request. For production, consider:
-      // 1. Implementing retry logic with exponential backoff for transient DB failures
-      // 2. Setting up alerting/monitoring for persistent failures (e.g., Sentry, PagerDuty)
-      // 3. Using a queue/background job to retry failed token updates asynchronously
-      logger.error('Failed to persist refreshed token', error, {
-        userId,
-        accountId: acc.id,
-      });
     }
+
+    logger.error('Failed to persist refreshed token after all retries', lastError, {
+      userId,
+      accountId: acc.id,
+      maxRetries,
+      recommendation:
+        'User may need to re-authenticate if token expires. Consider setting up monitoring for persistent failures.',
+    });
   });
 
   return youtube({ version: 'v3', auth: oauth2Client });
@@ -121,6 +156,9 @@ function transformVideoItem(item: youtube_v3.Schema$Video) {
 /**
  * Fetch liked videos from YouTube
  * Uses the videos.list API with myRating='like' parameter (modern approach)
+ *
+ * @throws {AuthenticationError} If authentication fails or tokens are invalid
+ * @throws {AppError} If API call fails due to rate limits, network errors, or invalid responses
  */
 export async function fetchLikedVideos(
   userId: string,
@@ -129,21 +167,114 @@ export async function fetchLikedVideos(
 ) {
   const yt = await createYouTubeClient(userId);
 
-  const response = await yt.videos.list({
-    myRating: 'like',
-    part: ['snippet'],
-    maxResults: Math.min(maxResults, 50),
-    pageToken,
-  });
+  try {
+    const response = await yt.videos.list({
+      myRating: 'like',
+      part: ['snippet'],
+      maxResults: Math.min(maxResults, 50),
+      pageToken,
+    });
 
-  const items = response.data.items || [];
-  const videos = items
-    .map(transformVideoItem)
-    .filter((v): v is YouTubeVideo => v !== null);
+    if (!response.data) {
+      logger.error('YouTube API returned empty response', { userId });
+      throw new AppError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'YouTube API returned an invalid response',
+      });
+    }
 
-  return {
-    videos,
-    nextPageToken: response.data.nextPageToken || undefined,
-    totalResults: response.data.pageInfo?.totalResults || 0,
-  };
+    const items = response.data.items || [];
+    const videos = items
+      .map((item) => {
+        const video = transformVideoItem(item);
+        if (!video) {
+          logger.warn('Failed to transform YouTube video item', {
+            userId,
+            videoId: item.id,
+            hasSnippet: !!item.snippet,
+          });
+        }
+        return video;
+      })
+      .filter((v): v is YouTubeVideo => v !== null);
+
+    return {
+      videos,
+      nextPageToken: response.data.nextPageToken || undefined,
+      totalResults: response.data.pageInfo?.totalResults || 0,
+    };
+  } catch (error) {
+    if (error instanceof AuthenticationError) {
+      throw error;
+    }
+
+    if (error && typeof error === 'object' && 'code' in error) {
+      const apiError = error as { code?: number; message?: string };
+
+      if (apiError.code === 429) {
+        logger.warn('YouTube API rate limit exceeded', { userId });
+        throw new AppError({
+          code: 'TOO_MANY_REQUESTS',
+          message:
+            'YouTube API rate limit exceeded. Please wait a moment and try again.',
+          cause: error,
+        });
+      }
+
+      if (apiError.code === 401 || apiError.code === 403) {
+        logger.error('YouTube API authentication failed', {
+          userId,
+          code: apiError.code,
+        });
+        throw new AuthenticationError({
+          message:
+            'YouTube API authentication failed. Please re-authenticate with Google.',
+          authErrorType: AUTH_ERROR_TYPES.TOKEN_EXPIRED,
+          cause: error,
+        });
+      }
+
+      if (
+        apiError.code === 403 &&
+        apiError.message?.toLowerCase().includes('quota')
+      ) {
+        logger.error('YouTube API quota exceeded', { userId });
+        throw new AppError({
+          code: 'TOO_MANY_REQUESTS',
+          message:
+            'YouTube API quota exceeded. Please try again later or contact support.',
+          cause: error,
+        });
+      }
+    }
+
+    if (error instanceof Error) {
+      const isNetworkError =
+        error.message.includes('ECONNRESET') ||
+        error.message.includes('ETIMEDOUT') ||
+        error.message.includes('ENOTFOUND') ||
+        error.message.includes('network') ||
+        error.message.includes('timeout');
+
+      if (isNetworkError) {
+        logger.error('Network error while fetching YouTube videos', {
+          userId,
+          error: error.message,
+        });
+        throw new AppError({
+          code: 'TIMEOUT',
+          message:
+            'Network error while fetching videos. Please check your connection and try again.',
+          cause: error,
+        });
+      }
+    }
+
+    logger.error('Unexpected error fetching YouTube videos', error, { userId });
+    throw new AppError({
+      code: 'INTERNAL_SERVER_ERROR',
+      message: 'Failed to fetch videos from YouTube. Please try again later.',
+      cause: error,
+    });
+  }
 }

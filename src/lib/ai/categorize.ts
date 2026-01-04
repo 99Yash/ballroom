@@ -338,20 +338,52 @@ export async function categorizeUserVideos(
   );
 
   const validCategoryIds = new Set(userCategories.map((c) => c.id));
+  const videoIdsSet = new Set(videosToAnalyze.map((v) => v.id));
+
   const invalidCategorizations = categorizations.filter(
     (c) => !validCategoryIds.has(c.categoryId)
+  );
+
+  const missingVideoIds = categorizations.filter(
+    (c) => !videoIdsSet.has(c.videoId)
+  );
+
+  const categorizedVideoIds = new Set(
+    categorizations.map((c) => c.videoId)
+  );
+  const uncategorizedVideoIds = videosToAnalyze.filter(
+    (v) => !categorizedVideoIds.has(v.id)
   );
 
   if (invalidCategorizations.length > 0) {
     logger.warn('AI returned invalid category IDs', {
       userId,
       invalidCount: invalidCategorizations.length,
+      invalidCategoryIds: invalidCategorizations.map((c) => c.categoryId),
+    });
+  }
+
+  if (missingVideoIds.length > 0) {
+    logger.warn('AI returned categorizations for unknown video IDs', {
+      userId,
+      missingCount: missingVideoIds.length,
+    });
+  }
+
+  if (uncategorizedVideoIds.length > 0) {
+    logger.warn('Some videos were not categorized by AI', {
+      userId,
+      uncategorizedCount: uncategorizedVideoIds.length,
+      uncategorizedVideoIds: uncategorizedVideoIds.map((v) => v.id),
     });
   }
 
   const categorizationMap = new Map(
     categorizations
-      .filter((c) => validCategoryIds.has(c.categoryId))
+      .filter(
+        (c) =>
+          validCategoryIds.has(c.categoryId) && videoIdsSet.has(c.videoId)
+      )
       .map((c) => [c.videoId, c.categoryId])
   );
 
@@ -360,7 +392,7 @@ export async function categorizeUserVideos(
 
   await db.transaction(async (tx) => {
     const updatesByCategory = new Map<string, string[]>();
-    const uncategorizedVideoIds: string[] = [];
+    const videosWithoutCategory: string[] = [];
 
     for (const video of videosToAnalyze) {
       const categoryId = categorizationMap.get(video.id);
@@ -370,7 +402,7 @@ export async function categorizeUserVideos(
         }
         updatesByCategory.get(categoryId)!.push(video.id);
       } else {
-        uncategorizedVideoIds.push(video.id);
+        videosWithoutCategory.push(video.id);
       }
     }
 
@@ -389,10 +421,10 @@ export async function categorizeUserVideos(
       }
     }
 
-    if (uncategorizedVideoIds.length > 0) {
+    if (videosWithoutCategory.length > 0) {
       const chunkSize = 1000;
-      for (let i = 0; i < uncategorizedVideoIds.length; i += chunkSize) {
-        const chunk = uncategorizedVideoIds.slice(i, i + chunkSize);
+      for (let i = 0; i < videosWithoutCategory.length; i += chunkSize) {
+        const chunk = videosWithoutCategory.slice(i, i + chunkSize);
         updatePromises.push(
           tx
             .update(videos)
