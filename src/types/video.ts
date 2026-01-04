@@ -6,7 +6,7 @@
  */
 
 import type { DatabaseVideo } from '~/db/schemas/videos';
-import { formatTimeToNow, serialize, type Serialize } from '~/lib/utils';
+import { serialize, type Serialize } from '~/lib/utils';
 
 /**
  * Re-exported from schema - inferred directly from Drizzle table definition
@@ -44,23 +44,4 @@ export type SerializedVideo = Serialize<Video>;
  */
 export function serializeVideo<T extends Video>(video: T): Serialize<T> {
   return serialize(video);
-}
-
-/**
- * Format a date string for display
- * @param dateString ISO 8601 date string
- * @returns Formatted date string like "Dec 12" or relative time like "2d ago"
- */
-export function formatPublishedDate(
-  dateString: string | null | undefined
-): string {
-  if (!dateString) return '';
-
-  const date = new Date(dateString);
-
-  if (Number.isNaN(date.getTime())) {
-    return '';
-  }
-
-  return formatTimeToNow(date, { showDateAfterDays: 30 });
 }

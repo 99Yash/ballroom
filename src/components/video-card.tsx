@@ -5,8 +5,8 @@ import Image from 'next/image';
 import { Badge } from '~/components/ui/badge';
 import { CalendarDaysIcon } from '~/components/ui/icons/calendar-days';
 import { PlayIcon } from '~/components/ui/icons/play';
-import { cn } from '~/lib/utils';
-import { type SerializedVideo, formatPublishedDate } from '~/types/video';
+import { cn, formatTimeToNow } from '~/lib/utils';
+import { type SerializedVideo } from '~/types/video';
 
 interface VideoCardProps {
   video: SerializedVideo;
@@ -17,7 +17,7 @@ interface VideoCardProps {
 export function VideoCard({ video, className, priority }: VideoCardProps) {
   const youtubeUrl = `https://www.youtube.com/watch?v=${video.youtubeId}`;
   const publishedDate = video.publishedAt
-    ? formatPublishedDate(video.publishedAt)
+    ? formatTimeToNow(video.publishedAt, { showDateAfterDays: 30 })
     : null;
 
   return (
