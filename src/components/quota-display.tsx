@@ -1,6 +1,7 @@
 'use client';
 
-import { format, formatDistanceToNow } from 'date-fns';
+import { format } from 'date-fns';
+import { formatTimeToNow } from '~/lib/utils';
 import { BarChart3, RefreshCw, Wand2 } from 'lucide-react';
 import * as React from 'react';
 import { Badge } from '~/components/ui/badge';
@@ -37,7 +38,7 @@ function QuotaItem({
   const exceeded = isQuotaExceeded(quota);
 
   const resetText = quota.resetAt
-    ? formatDistanceToNow(new Date(quota.resetAt), { addSuffix: true })
+    ? formatTimeToNow(quota.resetAt)
     : null;
 
   const displayValue = `${quota.used.toLocaleString()}/${quota.limit.toLocaleString()}`;
@@ -185,11 +186,7 @@ export function QuotaDisplay() {
             <div className="border-t border-border pt-3">
               <div className="text-xs text-muted-foreground">
                 <div className="font-medium mb-1">Resets</div>
-                <div>
-                  {formatDistanceToNow(new Date(quota.sync.resetAt), {
-                    addSuffix: true,
-                  })}
-                </div>
+                <div>{formatTimeToNow(quota.sync.resetAt)}</div>
                 <div className="mt-1 opacity-75">
                   {format(new Date(quota.sync.resetAt), 'PPp')}
                 </div>

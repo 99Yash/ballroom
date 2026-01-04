@@ -9,8 +9,29 @@ import {
 } from './quota';
 import { fetchLikedVideos, type YouTubeVideo } from './youtube';
 
-// Track consecutive failures per user for monitoring
+const FAILURE_TRACKER_MAX_SIZE = 1000;
+
 const lastSeenAtFailureCounts = new Map<string, number>();
+
+function trackFailure(userId: string): number {
+  if (
+    lastSeenAtFailureCounts.size >= FAILURE_TRACKER_MAX_SIZE &&
+    !lastSeenAtFailureCounts.has(userId)
+  ) {
+    const oldestKey = lastSeenAtFailureCounts.keys().next().value;
+    if (oldestKey) {
+      lastSeenAtFailureCounts.delete(oldestKey);
+    }
+  }
+
+  const count = (lastSeenAtFailureCounts.get(userId) ?? 0) + 1;
+  lastSeenAtFailureCounts.set(userId, count);
+  return count;
+}
+
+function clearFailure(userId: string): void {
+  lastSeenAtFailureCounts.delete(userId);
+}
 
 /**
  * Retries a function with exponential backoff.
@@ -239,20 +260,15 @@ export async function progressiveSync(
     }
 
     try {
-      // Retry with exponential backoff (3 attempts: 100ms, 200ms, 400ms)
       await retryWithBackoff(
         () => updateLastSeenAt(userId, youtubeIds),
         3,
         100
       );
-      // Reset failure count on success
-      lastSeenAtFailureCounts.delete(userId);
+      clearFailure(userId);
     } catch (error) {
-      // Increment failure count for monitoring
-      const failureCount = (lastSeenAtFailureCounts.get(userId) || 0) + 1;
-      lastSeenAtFailureCounts.set(userId, failureCount);
+      const failureCount = trackFailure(userId);
 
-      // Log error with failure count
       logger.error('Failed to update lastSeenAt after video sync batch', {
         userId,
         youtubeIdCount: youtubeIds.length,
@@ -260,20 +276,15 @@ export async function progressiveSync(
         error: error instanceof Error ? error.message : String(error),
       });
 
-      // Warn if failures are accumulating (potential persistent issue)
       if (failureCount >= 3) {
         logger.warn(
           'Persistent lastSeenAt update failures detected - may affect unliked video detection',
           {
             userId,
             consecutiveFailures: failureCount,
-            recommendation:
-              'Check database connectivity and performance. Stale lastSeenAt values will be corrected in future syncs, but unliked detection may be inaccurate until resolved.',
           }
         );
       }
-
-      // Videos are already saved and quota consumed; stale lastSeenAt will be corrected in future syncs
     }
 
     totalFetched += fetchedVideos.length;

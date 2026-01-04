@@ -6,7 +6,7 @@
  */
 
 import type { DatabaseVideo } from '~/db/schemas/videos';
-import { serialize, type Serialize } from '~/lib/utils';
+import { formatTimeToNow, serialize, type Serialize } from '~/lib/utils';
 
 /**
  * Re-exported from schema - inferred directly from Drizzle table definition
@@ -49,7 +49,7 @@ export function serializeVideo<T extends Video>(video: T): Serialize<T> {
 /**
  * Format a date string for display
  * @param dateString ISO 8601 date string
- * @returns Formatted date string like "Dec 12, 2024" or relative time like "2 days ago"
+ * @returns Formatted date string like "Dec 12" or relative time like "2d ago"
  */
 export function formatPublishedDate(
   dateString: string | null | undefined
@@ -62,27 +62,5 @@ export function formatPublishedDate(
     return '';
   }
 
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-
-  if (diffDays < 0) {
-    return date.toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    });
-  }
-
-  if (diffDays === 0) return 'Today';
-  if (diffDays === 1) return 'Yesterday';
-  if (diffDays < 7) return `${diffDays} days ago`;
-  if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
-  if (diffDays < 365) return `${Math.floor(diffDays / 30)} months ago`;
-
-  return date.toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  });
+  return formatTimeToNow(date, { showDateAfterDays: 30 });
 }

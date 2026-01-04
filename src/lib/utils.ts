@@ -1,4 +1,8 @@
 import { clsx, type ClassValue } from 'clsx';
+import {
+  formatDistanceToNowStrict,
+  type FormatDistanceToNowStrictOptions,
+} from 'date-fns';
 import { twMerge } from 'tailwind-merge';
 import * as z from 'zod/v4';
 import {
@@ -221,4 +225,120 @@ export function removeLocalStorageItem(key: LocalStorageKey): void {
   } catch (error) {
     logger.error('Failed to remove LocalStorage item', error, { key });
   }
+}
+
+/**
+ * Format a date using Intl.DateTimeFormat
+ */
+export function formatDate(
+  date: Date | string | number,
+  opts: Intl.DateTimeFormatOptions = {}
+): string {
+  return new Intl.DateTimeFormat('en-US', {
+    month: opts.month ?? 'long',
+    day: opts.day ?? 'numeric',
+    year: opts.year ?? 'numeric',
+    ...opts,
+  }).format(new Date(date));
+}
+
+/**
+ * Custom locale for formatDistanceToNowStrict
+ */
+const formatDistanceLocale = {
+  lessThanXSeconds: 'just now',
+  xSeconds: 'just now',
+  halfAMinute: 'just now',
+  lessThanXMinutes: '{{count}}m',
+  xMinutes: '{{count}}m',
+  aboutXHours: '{{count}}h',
+  xHours: '{{count}}h',
+  xDays: '{{count}}d',
+  aboutXWeeks: '{{count}}w',
+  xWeeks: '{{count}}w',
+  aboutXMonths: '{{count}}mo',
+  xMonths: '{{count}}mo',
+  aboutXYears: '{{count}}y',
+  xYears: '{{count}}y',
+  overXYears: '{{count}}y',
+  almostXYears: '{{count}}y',
+};
+
+function formatDistance(token: string, count: number): string {
+  const result =
+    formatDistanceLocale[token as keyof typeof formatDistanceLocale]?.replace(
+      '{{count}}',
+      count.toString()
+    ) ?? token;
+
+  if (result === 'just now') return result;
+  return result;
+}
+
+/**
+ * Format time relative to now with option to show absolute date after threshold
+ * @param date - Date to format
+ * @param showDateAfterDays - Show absolute date if older than this many days (default: Infinity)
+ * @param options - Additional formatDistanceToNowStrict options
+ */
+export function formatTimeToNow(
+  date: Date | string | number,
+  {
+    showDateAfterDays = Infinity,
+  }: { showDateAfterDays?: number } = {},
+  options?: FormatDistanceToNowStrictOptions
+): string {
+  const dateObj = new Date(date);
+  const daysDiff = Math.floor(
+    (new Date().getTime() - dateObj.getTime()) / (1000 * 60 * 60 * 24)
+  );
+
+  if (daysDiff > showDateAfterDays) {
+    return formatDate(dateObj, { month: 'short', day: 'numeric' });
+  }
+
+  return formatDistanceToNowStrict(dateObj, {
+    locale: {
+      formatDistance,
+    },
+    addSuffix: true,
+    ...options,
+  });
+}
+
+/**
+ * Format number in compact notation (1k, 1M, 1B)
+ */
+export function formatNumber(num: number): string {
+  if (num < 1000) return num.toString();
+  if (num < 1_000_000) return `${(num / 1000).toFixed(1)}k`;
+  if (num < 1_000_000_000) return `${(num / 1_000_000).toFixed(1)}M`;
+  return `${(num / 1_000_000_000).toFixed(1)}B`;
+}
+
+/**
+ * Truncate string to specified length with ellipsis
+ */
+export function truncate(str: string, length: number): string {
+  return str.length > length ? `${str.substring(0, length)}...` : str;
+}
+
+/**
+ * Convert string to URL-friendly slug
+ */
+export function slugify(str: string): string {
+  return str
+    .toLowerCase()
+    .replace(/ /g, '-')
+    .replace(/[^\w-]+/g, '')
+    .replace(/--+/g, '-');
+}
+
+/**
+ * Get base URL for the application
+ */
+export function getBaseUrl(): string {
+  if (typeof window !== 'undefined') return window.location.origin;
+  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
+  return `http://localhost:${process.env.PORT ?? 3000}`;
 }

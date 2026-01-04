@@ -1,6 +1,5 @@
 'use client';
 
-import { formatDistanceToNow } from 'date-fns';
 import { ChevronDown, Clock, FastForward, RotateCcw } from 'lucide-react';
 import * as React from 'react';
 import { toast } from 'sonner';
@@ -22,7 +21,7 @@ import {
   TooltipTrigger,
 } from '~/components/ui/tooltip';
 import { isQuotaExceeded, isQuotaLow, useQuota } from '~/hooks/use-quota';
-import { cn } from '~/lib/utils';
+import { cn, formatTimeToNow } from '~/lib/utils';
 
 interface SyncButtonProps {
   onSyncComplete?: (result: { synced: number; new: number }) => void;
@@ -198,7 +197,7 @@ export function SyncButton({
   const isLoading = isSyncing || isCategorizing;
 
   const lastSyncText = syncStatus?.lastSyncAt
-    ? formatDistanceToNow(new Date(syncStatus.lastSyncAt), { addSuffix: true })
+    ? formatTimeToNow(syncStatus.lastSyncAt)
     : null;
 
   const categorizeQuotaText = quota

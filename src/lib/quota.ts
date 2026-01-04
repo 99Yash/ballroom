@@ -141,24 +141,10 @@ export async function checkAndResetQuotaIfNeeded(
 ): Promise<boolean> {
   const nextResetDate = getNextQuotaResetDate();
 
-  // Use PostgreSQL's NOW() AT TIME ZONE 'UTC' for consistent UTC comparison
-  // This ensures both sides of the comparison are in UTC, avoiding timezone issues
   const result = await db
     .update(user)
-    .set({
-      syncQuotaUsed: 0,
-      categorizeQuotaUsed: 0,
-      quotaResetAt: nextResetDate,
-    })
-    .where(
-      and(
-        eq(user.id, userId),
-        or(
-          isNull(user.quotaResetAt),
-          sql`${user.quotaResetAt} <= (NOW() AT TIME ZONE 'UTC')`
-        )
-      )
-    );
+    .set(buildQuotaResetValues(nextResetDate))
+    .where(buildQuotaResetNeededCondition(userId));
 
   const rowsAffected = result.rowCount ?? 0;
   const didReset = rowsAffected > 0;
@@ -226,26 +212,11 @@ export async function checkAndIncrementQuotaWithinTx(
   }
   if (amount === 0) return;
 
-  // Check and reset quota if needed (within transaction)
-  // Use PostgreSQL's NOW() AT TIME ZONE 'UTC' for consistent UTC comparison
   const nextResetDate = getNextQuotaResetDate();
-
   await tx
     .update(user)
-    .set({
-      syncQuotaUsed: 0,
-      categorizeQuotaUsed: 0,
-      quotaResetAt: nextResetDate,
-    })
-    .where(
-      and(
-        eq(user.id, userId),
-        or(
-          isNull(user.quotaResetAt),
-          sql`${user.quotaResetAt} <= (NOW() AT TIME ZONE 'UTC')`
-        )
-      )
-    );
+    .set(buildQuotaResetValues(nextResetDate))
+    .where(buildQuotaResetNeededCondition(userId));
 
   // Read current quota values (within transaction for consistency)
   const [userData] = await tx
@@ -410,6 +381,31 @@ function buildQuotaLimitCheckCondition(
  */
 function getQuotaTypeDisplayName(quotaType: QuotaType): string {
   return quotaType === 'sync' ? 'Sync' : 'Categorization';
+}
+
+/**
+ * Builds the SET values for quota reset (zeroes out usage, sets next reset date).
+ */
+function buildQuotaResetValues(nextResetDate: Date) {
+  return {
+    syncQuotaUsed: 0,
+    categorizeQuotaUsed: 0,
+    quotaResetAt: nextResetDate,
+  };
+}
+
+/**
+ * Builds the WHERE condition for checking if quota reset is needed.
+ * Returns true if quotaResetAt is null or has passed.
+ */
+function buildQuotaResetNeededCondition(userId: string) {
+  return and(
+    eq(user.id, userId),
+    or(
+      isNull(user.quotaResetAt),
+      sql`${user.quotaResetAt} <= (NOW() AT TIME ZONE 'UTC')`
+    )
+  );
 }
 
 /**
