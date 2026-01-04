@@ -98,8 +98,8 @@ function handleSyncError(
     throw error;
   }
 
-  // Fallback: convert non-Error values to Error
-  // This ensures TypeScript recognizes all code paths throw
+  // Fallback: convert non-Error values to an Error instance
+  // Runtime safeguard for unexpected error types, while keeping all code paths throwing
   throw new Error(String(error));
 }
 
