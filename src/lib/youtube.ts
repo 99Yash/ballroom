@@ -76,6 +76,12 @@ async function createYouTubeClient(userId: string) {
           .where(eq(account.id, acc.id));
       }
     } catch (error) {
+      // Production consideration: Token refresh persistence failures are logged but not retried
+      // to avoid interrupting the OAuth flow. If persistence fails, the new token is lost and
+      // the user will need to re-authenticate on the next request. For production, consider:
+      // 1. Implementing retry logic with exponential backoff for transient DB failures
+      // 2. Setting up alerting/monitoring for persistent failures (e.g., Sentry, PagerDuty)
+      // 3. Using a queue/background job to retry failed token updates asynchronously
       logger.error('Failed to persist refreshed token', error, {
         userId,
         accountId: acc.id,

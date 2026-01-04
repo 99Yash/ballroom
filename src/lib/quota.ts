@@ -193,11 +193,9 @@ export async function checkQuota(
 
     throw new AppError({
       code: 'QUOTA_EXCEEDED',
-      message: `${
-        quotaType === 'sync' ? 'Sync' : 'Categorization'
-      } quota exceeded. Used: ${quota.used}/${
-        quota.limit
-      }. Resets in ${daysUntilReset} days.`,
+      message: `${getQuotaTypeDisplayName(quotaType)} quota exceeded. Used: ${
+        quota.used
+      }/${quota.limit}. Resets in ${daysUntilReset} days.`,
     });
   }
 
@@ -267,21 +265,14 @@ export async function checkAndIncrementQuotaWithinTx(
   }
 
   // Check quota
-  const currentUsed =
-    quotaType === 'sync'
-      ? userData.syncQuotaUsed
-      : userData.categorizeQuotaUsed;
-  const limit =
-    quotaType === 'sync'
-      ? userData.syncQuotaLimit
-      : userData.categorizeQuotaLimit;
+  const { used: currentUsed, limit } = getQuotaValues(userData, quotaType);
 
   if (currentUsed + amount > limit) {
     throw new AppError({
       code: 'QUOTA_EXCEEDED',
-      message: `${
-        quotaType === 'sync' ? 'Sync' : 'Categorization'
-      } quota exceeded. Used: ${currentUsed}/${limit}. Resets monthly.`,
+      message: `${getQuotaTypeDisplayName(
+        quotaType
+      )} quota exceeded. Used: ${currentUsed}/${limit}. Resets monthly.`,
     });
   }
 
@@ -291,13 +282,7 @@ export async function checkAndIncrementQuotaWithinTx(
     .update(user)
     .set(buildQuotaIncrementUpdate(quotaType, amount))
     .where(
-      and(
-        eq(user.id, userId),
-        // Additional safety check: ensure quota won't exceed limit
-        quotaType === 'sync'
-          ? sql`${user.syncQuotaUsed} + ${amount} <= ${user.syncQuotaLimit}`
-          : sql`${user.categorizeQuotaUsed} + ${amount} <= ${user.categorizeQuotaLimit}`
-      )
+      and(eq(user.id, userId), buildQuotaLimitCheckCondition(quotaType, amount))
     );
 
   const rowsAffected = result.rowCount ?? 0;
@@ -322,21 +307,17 @@ export async function checkAndIncrementQuotaWithinTx(
       });
     }
 
-    const recheckUsed =
-      quotaType === 'sync'
-        ? recheckData.syncQuotaUsed
-        : recheckData.categorizeQuotaUsed;
-    const recheckLimit =
-      quotaType === 'sync'
-        ? recheckData.syncQuotaLimit
-        : recheckData.categorizeQuotaLimit;
+    const { used: recheckUsed, limit: recheckLimit } = getQuotaValues(
+      recheckData,
+      quotaType
+    );
 
     if (recheckUsed + amount > recheckLimit) {
       throw new AppError({
         code: 'QUOTA_EXCEEDED',
-        message: `${
-          quotaType === 'sync' ? 'Sync' : 'Categorization'
-        } quota exceeded. Used: ${recheckUsed}/${recheckLimit}. Resets monthly.`,
+        message: `${getQuotaTypeDisplayName(
+          quotaType
+        )} quota exceeded. Used: ${recheckUsed}/${recheckLimit}. Resets monthly.`,
       });
     }
 
@@ -356,6 +337,46 @@ export async function checkAndIncrementQuotaWithinTx(
     newUsed: currentUsed + amount,
     limit,
   });
+}
+
+/**
+ * Helper function to extract quota values (used and limit) from user data based on quota type.
+ */
+function getQuotaValues(
+  userData: {
+    syncQuotaUsed: number;
+    syncQuotaLimit: number;
+    categorizeQuotaUsed: number;
+    categorizeQuotaLimit: number;
+  },
+  quotaType: QuotaType
+): { used: number; limit: number } {
+  return quotaType === 'sync'
+    ? { used: userData.syncQuotaUsed, limit: userData.syncQuotaLimit }
+    : {
+        used: userData.categorizeQuotaUsed,
+        limit: userData.categorizeQuotaLimit,
+      };
+}
+
+/**
+ * Helper function to build the WHERE clause condition for quota limit check.
+ * Ensures quota won't exceed limit when incrementing.
+ */
+function buildQuotaLimitCheckCondition(
+  quotaType: QuotaType,
+  amount: number
+): ReturnType<typeof sql> {
+  return quotaType === 'sync'
+    ? sql`${user.syncQuotaUsed} + ${amount} <= ${user.syncQuotaLimit}`
+    : sql`${user.categorizeQuotaUsed} + ${amount} <= ${user.categorizeQuotaLimit}`;
+}
+
+/**
+ * Helper function to get the display name for a quota type.
+ */
+function getQuotaTypeDisplayName(quotaType: QuotaType): string {
+  return quotaType === 'sync' ? 'Sync' : 'Categorization';
 }
 
 /**

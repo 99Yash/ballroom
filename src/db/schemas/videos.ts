@@ -2,15 +2,27 @@ import { sql, type SQL } from 'drizzle-orm';
 import {
   boolean,
   index,
+  pgEnum,
   pgTable,
   text,
   timestamp,
   unique,
   type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
-import { VIDEO_SYNC_STATUS, type VideoSyncStatus } from '~/lib/constants';
 import { user } from './auth';
 import { createId, lifecycle_dates } from './helpers';
+
+export const videoSyncStatusEnum = pgEnum('video_sync_status', [
+  'active',
+  'unliked',
+]);
+
+export type VideoSyncStatus = 'active' | 'unliked';
+
+export const VIDEO_SYNC_STATUS = {
+  ACTIVE: 'active',
+  UNLIKED: 'unliked',
+} as const satisfies Record<string, VideoSyncStatus>;
 
 /**
  * Creates a weighted full-text search vector expression for video search.
@@ -83,10 +95,7 @@ export const videos = pgTable(
       onDelete: 'set null',
     }),
     lastAnalyzedAt: timestamp('last_analyzed_at'),
-    syncStatus: text('sync_status')
-      .default(VIDEO_SYNC_STATUS.ACTIVE)
-      .notNull()
-      .$type<VideoSyncStatus>(),
+    syncStatus: videoSyncStatusEnum('sync_status').default('active').notNull(),
     lastSeenAt: timestamp('last_seen_at'),
     ...lifecycle_dates,
   },

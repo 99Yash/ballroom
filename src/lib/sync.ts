@@ -66,6 +66,10 @@ const defaultOptions: Required<ProgressiveSyncOptions> = {
  * - Automatically increments quota usage in the same transaction as video insertion
  * - Quota is checked per batch, so partial batches may be inserted before quota
  *   exhaustion is detected
+ * - **Important**: Quota is consumed atomically with video insertion. If videos are
+ *   successfully inserted but the sync fails later (e.g., during `updateLastSeenAt`),
+ *   the quota remains consumed. This is intentional - quota tracks successful video
+ *   insertions, not sync completion status.
  *
  * ## Unliked Video Marking
  *
@@ -86,7 +90,8 @@ const defaultOptions: Required<ProgressiveSyncOptions> = {
  *   to prevent unbounded syncs. The sync will stop when this limit is reached.
  * @param options.checkQuota - Whether to check and enforce quota limits before
  *   inserting new videos. Default: `true`. When `false`, quota checks are skipped
- *   but quota is still incremented if videos are inserted.
+ *   and quota is NOT incremented (useful for admin/internal operations that should
+ *   not count against user quotas).
  *
  * @returns A promise that resolves to a `SyncResult` object containing:
  *   - `synced`: Total number of videos fetched from YouTube (new + existing)
@@ -241,6 +246,23 @@ export async function progressiveSync(
   };
 }
 
+/**
+ * Inserts new videos and optionally increments quota within a single transaction.
+ *
+ * **Transaction Atomicity**: Video insertion and quota increment happen atomically.
+ * If either operation fails, the entire transaction rolls back. This ensures quota
+ * is only consumed when videos are successfully inserted.
+ *
+ * **Post-Transaction Behavior**: Once the transaction commits, videos are in the
+ * database and quota is consumed. If subsequent operations in the sync process fail
+ * (e.g., `updateLastSeenAt`), the quota remains consumed. This is intentional -
+ * quota tracks successful video insertions, not overall sync completion.
+ *
+ * @param userId - The user ID to insert videos for
+ * @param newVideos - Array of YouTube videos to insert
+ * @param shouldCheckQuota - If true, checks quota limits and increments quota.
+ *   If false, quota is not checked or incremented (for admin/internal operations).
+ */
 async function insertNewVideosAndIncrementQuota(
   userId: string,
   newVideos: YouTubeVideo[],

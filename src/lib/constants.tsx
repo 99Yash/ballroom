@@ -67,9 +67,5 @@ export const APP_CONFIG = {
   },
 } as const;
 
-export type VideoSyncStatus = 'active' | 'unliked';
-
-export const VIDEO_SYNC_STATUS = {
-  ACTIVE: 'active',
-  UNLIKED: 'unliked',
-} as const satisfies Record<string, VideoSyncStatus>;
+export { VIDEO_SYNC_STATUS } from '~/db/schemas/videos';
+export type { VideoSyncStatus } from '~/db/schemas/videos';

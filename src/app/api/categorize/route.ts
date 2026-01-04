@@ -7,7 +7,7 @@ import { requireSession } from '~/lib/auth/session';
 import { VIDEO_SYNC_STATUS } from '~/lib/constants';
 import { AppError, createErrorResponse } from '~/lib/errors';
 import { logger } from '~/lib/logger';
-import { checkQuota, formatQuotaForClient, getUserQuotas } from '~/lib/quota';
+import { formatQuotaForClient, getUserQuotas } from '~/lib/quota';
 import {
   categorizeVideosSchema,
   validateRequestBody,
