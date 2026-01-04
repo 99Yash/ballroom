@@ -245,6 +245,10 @@ export async function checkAndIncrementQuotaWithinTx(
       )
     );
 
+  // Note: This reset-then-read pattern runs within a single transaction. Even if a
+  // concurrent transaction also resets quota around this time, the later conditional
+  // increment (with a guarded WHERE clause) ensures we never exceed the user's quota.
+  // At worst, a concurrent reset causes us to use a more conservative view of usage.
   // Read current quota values (within transaction for consistency)
   const [userData] = await tx
     .select({
