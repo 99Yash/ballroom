@@ -12,6 +12,7 @@ export interface SparklesIconHandle {
 
 interface SparklesIconProps extends React.HTMLAttributes<HTMLDivElement> {
   size?: number;
+  animate?: boolean;
 }
 
 const SPARKLE_VARIANTS: Variants = {
@@ -25,6 +26,8 @@ const SPARKLE_VARIANTS: Variants = {
     transition: {
       duration: 1,
       bounce: 0.3,
+      repeat: Infinity,
+      repeatType: 'loop',
     },
   },
 };
@@ -43,12 +46,14 @@ const STAR_VARIANTS: Variants = {
       stiffness: 70,
       damping: 10,
       mass: 0.4,
+      repeat: Infinity,
+      repeatType: 'loop',
     },
   }),
 };
 
 const SparklesIcon = React.forwardRef<SparklesIconHandle, SparklesIconProps>(
-  ({ onMouseEnter, onMouseLeave, className, size = 28, ...props }, ref) => {
+  ({ onMouseEnter, onMouseLeave, className, size = 28, animate = false, ...props }, ref) => {
     const starControls = useAnimation();
     const sparkleControls = useAnimation();
     const isControlledRef = React.useRef(false);
@@ -68,28 +73,38 @@ const SparklesIcon = React.forwardRef<SparklesIconHandle, SparklesIconProps>(
       };
     });
 
+    React.useEffect(() => {
+      if (animate && !isControlledRef.current) {
+        sparkleControls.start('hover');
+        starControls.start('blink', { delay: 1 });
+      } else if (!animate && !isControlledRef.current) {
+        sparkleControls.start('initial');
+        starControls.start('initial');
+      }
+    }, [animate, sparkleControls, starControls]);
+
     const handleMouseEnter = React.useCallback(
       (e: React.MouseEvent<HTMLDivElement>) => {
-        if (!isControlledRef.current) {
+        if (isControlledRef.current || animate) {
+          onMouseEnter?.(e);
+        } else {
           sparkleControls.start('hover');
           starControls.start('blink', { delay: 1 });
-        } else {
-          onMouseEnter?.(e);
         }
       },
-      [onMouseEnter, sparkleControls, starControls]
+      [onMouseEnter, sparkleControls, starControls, animate]
     );
 
     const handleMouseLeave = React.useCallback(
       (e: React.MouseEvent<HTMLDivElement>) => {
-        if (!isControlledRef.current) {
+        if (isControlledRef.current || animate) {
+          onMouseLeave?.(e);
+        } else {
           sparkleControls.start('initial');
           starControls.start('initial');
-        } else {
-          onMouseLeave?.(e);
         }
       },
-      [sparkleControls, starControls, onMouseLeave]
+      [sparkleControls, starControls, onMouseLeave, animate]
     );
 
     return (

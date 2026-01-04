@@ -1,9 +1,11 @@
 'use client';
 
-import { Calendar, Play } from 'lucide-react';
 import { motion } from 'motion/react';
 import Image from 'next/image';
 import { Badge } from '~/components/ui/badge';
+import { CalendarDaysIcon } from '~/components/ui/icons/calendar-days';
+import { PlayIcon } from '~/components/ui/icons/play';
+import { TruncatedText } from '~/components/ui/truncated-text';
 import { cn } from '~/lib/utils';
 import { type SerializedVideo, formatPublishedDate } from '~/types/video';
 
@@ -54,19 +56,15 @@ export function VideoCard({ video, className, priority }: VideoCardProps) {
           </>
         ) : (
           <div className="flex h-full items-center justify-center bg-secondary/50">
-            <Play className="h-12 w-12 text-muted-foreground/40" />
+            <PlayIcon size={48} className="text-muted-foreground/40" animate />
           </div>
         )}
 
         {/* Play Button Overlay - Pops in center */}
         <div className="absolute inset-0 flex items-center justify-center opacity-0 transition-opacity duration-300 group-hover:opacity-100">
-          <motion.div
-            initial={{ scale: 0.5, rotate: -10 }}
-            whileHover={{ scale: 1.1, rotate: 0 }}
-            className="flex h-14 w-14 items-center justify-center rounded-full bg-white/90 text-primary shadow-lg backdrop-blur-sm dark:bg-black/80"
-          >
-            <Play className="ml-1 h-6 w-6 fill-current" />
-          </motion.div>
+          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-white/90 text-primary shadow-lg backdrop-blur-sm transition-transform duration-300 group-hover:scale-105 dark:bg-black/80">
+            <PlayIcon size={24} className="ml-1" animate />
+          </div>
         </div>
 
         {/* Floating Category Badge (Sticker style) */}
@@ -84,20 +82,23 @@ export function VideoCard({ video, className, priority }: VideoCardProps) {
 
       {/* Content */}
       <div className="flex flex-1 flex-col gap-3 p-5">
-        <h3 className="line-clamp-2 font-bold leading-tight tracking-tight text-foreground/90 group-hover:text-primary">
+        <TruncatedText
+          as="h3"
+          className="line-clamp-2 font-bold leading-tight tracking-tight text-foreground/90 group-hover:text-primary"
+        >
           {video.title}
-        </h3>
+        </TruncatedText>
 
         <div className="mt-auto flex items-center justify-between gap-2 border-t border-border/50 pt-3 text-xs text-muted-foreground">
           <div className="flex items-center gap-1.5 truncate font-medium">
-            <span className="truncate hover:text-foreground">
+            <TruncatedText as="span" className="truncate hover:text-foreground">
               {video.channelName}
-            </span>
+            </TruncatedText>
           </div>
 
           {publishedDate && (
             <div className="flex shrink-0 items-center gap-1 opacity-70">
-              <Calendar className="h-3 w-3" />
+              <CalendarDaysIcon size={12} />
               <span>{publishedDate}</span>
             </div>
           )}

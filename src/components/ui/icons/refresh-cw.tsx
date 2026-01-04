@@ -11,10 +11,11 @@ export interface RefreshCCWIconWIcon {
 
 interface RefreshCWIconProps extends React.HTMLAttributes<HTMLDivElement> {
   size?: number;
+  animate?: boolean;
 }
 
 const RefreshCWIcon = React.forwardRef<RefreshCCWIconWIcon, RefreshCWIconProps>(
-  ({ onMouseEnter, onMouseLeave, className, size = 28, ...props }, ref) => {
+  ({ onMouseEnter, onMouseLeave, className, size = 28, animate = false, ...props }, ref) => {
     const controls = useAnimation();
     const isControlledRef = React.useRef(false);
 
@@ -26,20 +27,34 @@ const RefreshCWIcon = React.forwardRef<RefreshCCWIconWIcon, RefreshCWIconProps>(
       };
     });
 
+    React.useEffect(() => {
+      if (animate && !isControlledRef.current) {
+        controls.start('animate');
+      } else if (!animate && !isControlledRef.current) {
+        controls.start('normal');
+      }
+    }, [animate, controls]);
+
     const handleMouseEnter = React.useCallback(
       (e: React.MouseEvent<HTMLDivElement>) => {
-        if (!isControlledRef.current) controls.start('animate');
-        else onMouseEnter?.(e);
+        if (isControlledRef.current || animate) {
+          onMouseEnter?.(e);
+        } else {
+          controls.start('animate');
+        }
       },
-      [controls, onMouseEnter]
+      [controls, onMouseEnter, animate]
     );
 
     const handleMouseLeave = React.useCallback(
       (e: React.MouseEvent<HTMLDivElement>) => {
-        if (!isControlledRef.current) controls.start('normal');
-        else onMouseLeave?.(e);
+        if (isControlledRef.current || animate) {
+          onMouseLeave?.(e);
+        } else {
+          controls.start('normal');
+        }
       },
-      [controls, onMouseLeave]
+      [controls, onMouseLeave, animate]
     );
 
     return (
@@ -62,7 +77,15 @@ const RefreshCWIcon = React.forwardRef<RefreshCCWIconWIcon, RefreshCWIconProps>(
           transition={{ type: 'spring', stiffness: 250, damping: 25 }}
           variants={{
             normal: { rotate: '0deg' },
-            animate: { rotate: '50deg' },
+            animate: { 
+              rotate: '360deg',
+              transition: {
+                duration: 1,
+                repeat: Infinity,
+                repeatType: 'loop',
+                ease: 'linear',
+              },
+            },
           }}
           animate={controls}
         >

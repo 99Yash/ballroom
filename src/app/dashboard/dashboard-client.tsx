@@ -18,6 +18,7 @@ import { CategoryManager } from '~/components/category-manager';
 import { SyncButton } from '~/components/sync-button';
 import { Button } from '~/components/ui/button';
 import { Input } from '~/components/ui/input';
+import { TruncatedText } from '~/components/ui/truncated-text';
 import { VideoCard } from '~/components/video-card';
 import { authClient } from '~/lib/auth/client';
 import { siteConfig } from '~/lib/site';
@@ -280,12 +281,18 @@ export function DashboardClient({
               <Youtube className="h-5 w-5 text-white" />
             </motion.div>
             <div className="min-w-0 flex-1">
-              <h1 className="truncate text-lg font-semibold tracking-tight">
+              <TruncatedText
+                as="h1"
+                className="truncate text-lg font-semibold tracking-tight"
+              >
                 {siteConfig.name}
-              </h1>
-              <p className="truncate text-xs text-muted-foreground/80">
+              </TruncatedText>
+              <TruncatedText
+                as="p"
+                className="truncate text-xs text-muted-foreground/80"
+              >
                 Welcome, {userName}
-              </p>
+              </TruncatedText>
             </div>
           </motion.div>
 
@@ -393,9 +400,12 @@ export function DashboardClient({
                   disabled={isLoading}
                   className="h-9 whitespace-nowrap rounded-lg border-border/50 px-4 text-sm font-medium shadow-sm transition-all duration-200 hover:shadow-md disabled:opacity-50 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md"
                 >
-                  <span className="truncate max-w-[120px] sm:max-w-none">
+                  <TruncatedText
+                    as="span"
+                    className="truncate max-w-[120px] sm:max-w-none"
+                  >
                     {category.name}
-                  </span>
+                  </TruncatedText>
                   <span className="ml-1.5 font-normal opacity-80">
                     ({count})
                   </span>
@@ -413,9 +423,12 @@ export function DashboardClient({
               className="h-9 border-dashed whitespace-nowrap rounded-lg border-border/50 px-4 text-sm font-medium shadow-sm transition-all duration-200 hover:shadow-md disabled:opacity-50 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md"
               disabled={isLoading}
             >
-              <span className="truncate max-w-[100px] sm:max-w-none">
+              <TruncatedText
+                as="span"
+                className="truncate max-w-[100px] sm:max-w-none"
+              >
                 Uncategorized
-              </span>
+              </TruncatedText>
               <span className="ml-1.5 font-normal opacity-80">
                 ({categoryCounts.uncategorized})
               </span>
