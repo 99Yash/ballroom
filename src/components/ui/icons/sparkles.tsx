@@ -4,6 +4,7 @@ import type { Variants } from 'motion/react';
 import { motion, useAnimation } from 'motion/react';
 import * as React from 'react';
 import { cn } from '~/lib/utils';
+import { useAnimatedIconCallback } from '~/hooks/use-animated-icon';
 
 export interface SparklesIconHandle {
   startAnimation: () => void;
@@ -73,15 +74,17 @@ const SparklesIcon = React.forwardRef<SparklesIconHandle, SparklesIconProps>(
       };
     });
 
-    React.useEffect(() => {
-      if (animate && !isControlledRef.current) {
-        sparkleControls.start('hover');
-        starControls.start('blink', { delay: 1 });
-      } else if (!animate && !isControlledRef.current) {
-        sparkleControls.start('initial');
-        starControls.start('initial');
-      }
-    }, [animate, sparkleControls, starControls]);
+    const startAnimation = React.useCallback(() => {
+      sparkleControls.start('hover');
+      starControls.start('blink', { delay: 1 });
+    }, [sparkleControls, starControls]);
+
+    const stopAnimation = React.useCallback(() => {
+      sparkleControls.start('initial');
+      starControls.start('initial');
+    }, [sparkleControls, starControls]);
+
+    useAnimatedIconCallback(startAnimation, stopAnimation, animate, isControlledRef);
 
     const handleMouseEnter = React.useCallback(
       (e: React.MouseEvent<HTMLDivElement>) => {

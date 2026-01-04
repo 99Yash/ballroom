@@ -3,6 +3,7 @@
 import { motion, useAnimation, Variants } from 'motion/react';
 import * as React from 'react';
 import { cn } from '~/lib/utils';
+import { useAnimatedIcon } from '~/hooks/use-animated-icon';
 
 export interface ZapHandle {
   startAnimation: () => void;
@@ -49,13 +50,7 @@ const ZapIcon = React.forwardRef<ZapHandle, ZapProps>(
       };
     });
 
-    React.useEffect(() => {
-      if (animate && !isControlledRef.current) {
-        controls.start('animate');
-      } else if (!animate && !isControlledRef.current) {
-        controls.start('normal');
-      }
-    }, [animate, controls]);
+    useAnimatedIcon(controls, animate, isControlledRef);
 
     const handleMouseEnter = React.useCallback(
       (e: React.MouseEvent<HTMLDivElement>) => {

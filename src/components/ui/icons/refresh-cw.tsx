@@ -2,6 +2,7 @@
 
 import { motion, useAnimation } from 'motion/react';
 import * as React from 'react';
+import { useAnimatedIcon } from '~/hooks/use-animated-icon';
 import { cn } from '~/lib/utils';
 
 export interface RefreshCCWIconWIcon {
@@ -15,7 +16,17 @@ interface RefreshCWIconProps extends React.HTMLAttributes<HTMLDivElement> {
 }
 
 const RefreshCWIcon = React.forwardRef<RefreshCCWIconWIcon, RefreshCWIconProps>(
-  ({ onMouseEnter, onMouseLeave, className, size = 28, animate = false, ...props }, ref) => {
+  (
+    {
+      onMouseEnter,
+      onMouseLeave,
+      className,
+      size = 28,
+      animate = false,
+      ...props
+    },
+    ref
+  ) => {
     const controls = useAnimation();
     const isControlledRef = React.useRef(false);
 
@@ -27,13 +38,7 @@ const RefreshCWIcon = React.forwardRef<RefreshCCWIconWIcon, RefreshCWIconProps>(
       };
     });
 
-    React.useEffect(() => {
-      if (animate && !isControlledRef.current) {
-        controls.start('animate');
-      } else if (!animate && !isControlledRef.current) {
-        controls.start('normal');
-      }
-    }, [animate, controls]);
+    useAnimatedIcon(controls, animate, isControlledRef);
 
     const handleMouseEnter = React.useCallback(
       (e: React.MouseEvent<HTMLDivElement>) => {
@@ -77,7 +82,7 @@ const RefreshCWIcon = React.forwardRef<RefreshCCWIconWIcon, RefreshCWIconProps>(
           transition={{ type: 'spring', stiffness: 250, damping: 25 }}
           variants={{
             normal: { rotate: '0deg' },
-            animate: { 
+            animate: {
               rotate: '360deg',
               transition: {
                 duration: 1,

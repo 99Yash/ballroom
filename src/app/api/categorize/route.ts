@@ -38,30 +38,21 @@ export async function POST(request: Request) {
     }
 
     await checkAndResetQuotaIfNeeded(session.user.id);
+
+    const result = await categorizeUserVideos(session.user.id, force);
+
     let quotas = null;
     let quotaFetchFailed = false;
     try {
       quotas = await getUserQuotas(session.user.id);
     } catch (quotaError) {
       quotaFetchFailed = true;
-      logger.warn('Failed to fetch quotas', { quotaError });
-    }
-
-    if (quotas?.categorize.isExceeded) {
-      const daysUntilReset = quotas.categorize.resetAt
-        ? Math.ceil(
-            (quotas.categorize.resetAt.getTime() - Date.now()) /
-              (1000 * 60 * 60 * 24)
-          )
-        : 0;
-
-      throw new AppError({
-        code: 'QUOTA_EXCEEDED',
-        message: `Categorization quota exceeded. Used: ${quotas.categorize.used}/${quotas.categorize.limit}. Resets in ${daysUntilReset} days.`,
+      logger.warn('Failed to fetch quotas after categorization', {
+        quotaError,
+        duration: Date.now() - startTime,
+        userId: session.user.id,
       });
     }
-
-    const result = await categorizeUserVideos(session.user.id, force);
 
     if (result.total === 0) {
       const quotaExceeded = quotas?.categorize.isExceeded ?? false;
@@ -87,18 +78,6 @@ export async function POST(request: Request) {
       });
 
       return response;
-    }
-
-    try {
-      quotas = await getUserQuotas(session.user.id);
-      quotaFetchFailed = false;
-    } catch (quotaError) {
-      quotaFetchFailed = true;
-      logger.warn('Failed to fetch quotas after categorization', {
-        quotaError,
-        duration: Date.now() - startTime,
-        userId: session.user.id,
-      });
     }
 
     const response = NextResponse.json({

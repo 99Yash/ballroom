@@ -67,7 +67,9 @@ function createQuotaStatus(
 }
 
 function getNextQuotaResetDate(): Date {
-  const now = new Date();
+  // Use Date.now() to explicitly get UTC milliseconds since epoch
+  // This ensures consistency with SQL's NOW() AT TIME ZONE 'UTC'
+  const now = new Date(Date.now());
   const resetDay = APP_CONFIG.quota.resetDayOfMonth;
 
   // Use UTC for all date operations to ensure consistency
