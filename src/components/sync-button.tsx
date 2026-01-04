@@ -4,6 +4,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { ChevronDown, Clock, FastForward, RotateCcw } from 'lucide-react';
 import * as React from 'react';
 import { toast } from 'sonner';
+import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import {
   DropdownMenu,
@@ -21,6 +22,7 @@ import {
   TooltipTrigger,
 } from '~/components/ui/tooltip';
 import { APP_CONFIG } from '~/lib/constants';
+import { cn } from '~/lib/utils';
 
 interface SyncButtonProps {
   onSyncComplete?: (result: { synced: number; new: number }) => void;
@@ -221,28 +223,33 @@ export function SyncButton({
     : null;
 
   const isCategorizeQuotaLow =
-    quota && quota.categorize.percentageUsed >= APP_CONFIG.quota.warningThreshold;
+    quota &&
+    quota.categorize.percentageUsed >= APP_CONFIG.quota.warningThreshold;
   const isCategorizeQuotaExceeded = quota && quota.categorize.remaining <= 0;
 
   return (
     <div className="flex w-full flex-col items-start gap-2">
       <div className="flex w-full flex-wrap items-center gap-2">
         <div className="flex">
-          <Button
-            onClick={handleQuickSync}
-            disabled={isLoading}
-            className="gap-2 rounded-r-none"
-          >
-            {isSyncing ? (
-              <Spinner className="h-4 w-4" />
-            ) : (
-              <RefreshCWIcon size={16} />
-            )}
-            <span className="hidden sm:inline">
-              Sync Videos (no auto-categorization)
-            </span>
-            <span className="sm:hidden">Sync Only</span>
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                onClick={handleQuickSync}
+                disabled={isLoading}
+                className="gap-2 rounded-r-none"
+              >
+                {isSyncing ? (
+                  <Spinner className="h-4 w-4" />
+                ) : (
+                  <RefreshCWIcon size={16} />
+                )}
+                <span>Sync</span>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Sync videos without auto-categorization</p>
+            </TooltipContent>
+          </Tooltip>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
@@ -310,15 +317,16 @@ export function SyncButton({
               )}
               <span className="hidden sm:inline">Categorize</span>
               {categorizeQuotaText && (
-                <span
-                  className={`text-xs ${
-                    isCategorizeQuotaLow
-                      ? 'text-amber-500'
-                      : 'text-muted-foreground'
-                  }`}
+                <Badge
+                  variant="secondary"
+                  className={cn(
+                    'ml-1 h-5 px-1.5 text-xs font-normal',
+                    isCategorizeQuotaLow && 'text-amber-500',
+                    isCategorizeQuotaExceeded && 'text-destructive'
+                  )}
                 >
-                  ({categorizeQuotaText})
-                </span>
+                  {categorizeQuotaText}
+                </Badge>
               )}
             </Button>
           </TooltipTrigger>
