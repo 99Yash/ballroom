@@ -40,9 +40,11 @@ export async function POST(request: Request) {
     // Check quota status early for consistency
     await checkAndResetQuotaIfNeeded(session.user.id);
     let quotas = null;
+    let quotaFetchFailed = false;
     try {
       quotas = await getUserQuotas(session.user.id);
     } catch (quotaError) {
+      quotaFetchFailed = true;
       logger.warn('Failed to fetch quotas', { quotaError });
     }
 
@@ -78,6 +80,7 @@ export async function POST(request: Request) {
         skipped: 0,
         message,
         ...(quotas && { quota: formatQuotaForClient(quotas) }),
+        ...(quotaFetchFailed && { quotaFetchFailed: true }),
       });
 
       logger.api('POST', '/api/categorize', {
@@ -94,7 +97,10 @@ export async function POST(request: Request) {
     // Refresh quotas after categorization (in case they changed)
     try {
       quotas = await getUserQuotas(session.user.id);
+      // Reset flag if post-categorization fetch succeeds
+      quotaFetchFailed = false;
     } catch (quotaError) {
+      quotaFetchFailed = true;
       logger.warn('Failed to fetch quotas after categorization', {
         quotaError,
         duration: Date.now() - startTime,
@@ -111,6 +117,7 @@ export async function POST(request: Request) {
           ? `Categorized ${result.categorized} of ${result.total} videos`
           : 'All videos are already categorized',
       ...(quotas && { quota: formatQuotaForClient(quotas) }),
+      ...(quotaFetchFailed && { quotaFetchFailed: true }),
     });
 
     logger.api('POST', '/api/categorize', {

@@ -18,9 +18,11 @@ export async function POST(request: Request) {
     const result = await syncFn(session.user.id, { checkQuota: true });
 
     let quotas = null;
+    let quotaFetchFailed = false;
     try {
       quotas = await getUserQuotas(session.user.id);
     } catch (quotaError) {
+      quotaFetchFailed = true;
       logger.warn('Failed to fetch quotas after sync', {
         quotaError,
         duration: Date.now() - startTime,
@@ -39,6 +41,7 @@ export async function POST(request: Request) {
           ? `Synced ${result.new} new videos`
           : 'No new videos found',
       ...(quotas && { quota: formatQuotaForClient(quotas) }),
+      ...(quotaFetchFailed && { quotaFetchFailed: true }),
     });
 
     logger.api('POST', '/api/youtube/sync', {

@@ -65,33 +65,28 @@ function getNextQuotaResetDate(): Date {
   const now = new Date();
   const resetDay = APP_CONFIG.quota.resetDayOfMonth;
 
-  const targetMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  // Use UTC for all date operations to ensure consistency
+  const utcYear = now.getUTCFullYear();
+  const utcMonth = now.getUTCMonth();
+
+  const targetMonth = new Date(Date.UTC(utcYear, utcMonth, 1));
   const lastDayOfTargetMonth = lastDayOfMonth(targetMonth);
-  const safeResetDay = Math.min(resetDay, lastDayOfTargetMonth.getDate());
+  const safeResetDay = Math.min(resetDay, lastDayOfTargetMonth.getUTCDate());
 
   let resetDate = new Date(
-    now.getFullYear(),
-    now.getMonth(),
-    safeResetDay,
-    0,
-    0,
-    0,
-    0
+    Date.UTC(utcYear, utcMonth, safeResetDay, 0, 0, 0, 0)
   );
 
   if (now >= resetDate) {
-    const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    const nextMonth = new Date(Date.UTC(utcYear, utcMonth + 1, 1));
     const lastDayOfNextMonth = lastDayOfMonth(nextMonth);
-    const safeNextResetDay = Math.min(resetDay, lastDayOfNextMonth.getDate());
+    const safeNextResetDay = Math.min(
+      resetDay,
+      lastDayOfNextMonth.getUTCDate()
+    );
 
     resetDate = new Date(
-      now.getFullYear(),
-      now.getMonth() + 1,
-      safeNextResetDay,
-      0,
-      0,
-      0,
-      0
+      Date.UTC(utcYear, utcMonth + 1, safeNextResetDay, 0, 0, 0, 0)
     );
   }
 
@@ -144,9 +139,10 @@ export async function getUserQuotas(userId: string): Promise<UserQuotas> {
 export async function checkAndResetQuotaIfNeeded(
   userId: string
 ): Promise<boolean> {
-  const now = new Date();
   const nextResetDate = getNextQuotaResetDate();
 
+  // Use PostgreSQL's NOW() AT TIME ZONE 'UTC' for consistent UTC comparison
+  // This ensures both sides of the comparison are in UTC, avoiding timezone issues
   const result = await db
     .update(user)
     .set({
@@ -157,7 +153,10 @@ export async function checkAndResetQuotaIfNeeded(
     .where(
       and(
         eq(user.id, userId),
-        or(isNull(user.quotaResetAt), sql`${user.quotaResetAt} <= ${now}`)
+        or(
+          isNull(user.quotaResetAt),
+          sql`${user.quotaResetAt} <= (NOW() AT TIME ZONE 'UTC')`
+        )
       )
     );
 
@@ -228,7 +227,8 @@ export async function checkAndIncrementQuotaWithinTx(
   if (amount === 0) return;
 
   // First, check and reset quota if needed (within transaction)
-  const now = new Date();
+  // Use PostgreSQL's NOW() AT TIME ZONE 'UTC' for consistent UTC comparison
+  // This ensures both sides of the comparison are in UTC, avoiding timezone issues
   const nextResetDate = getNextQuotaResetDate();
 
   await tx
@@ -241,7 +241,10 @@ export async function checkAndIncrementQuotaWithinTx(
     .where(
       and(
         eq(user.id, userId),
-        or(isNull(user.quotaResetAt), sql`${user.quotaResetAt} <= ${now}`)
+        or(
+          isNull(user.quotaResetAt),
+          sql`${user.quotaResetAt} <= (NOW() AT TIME ZONE 'UTC')`
+        )
       )
     );
 

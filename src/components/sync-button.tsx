@@ -88,6 +88,14 @@ export function SyncButton({
 
       setStatus(message);
       toast.success('Sync complete', { description: message });
+
+      if (result.quotaFetchFailed) {
+        toast.warning('Quota information temporarily unavailable', {
+          description:
+            'Sync succeeded, but quota info may be outdated. Refreshing...',
+        });
+      }
+
       onSyncComplete?.(result);
 
       await Promise.all([fetchSyncStatus(), refetchQuota()]);
@@ -165,6 +173,14 @@ export function SyncButton({
 
       setStatus(message);
       toast.success('Categorization complete', { description: message });
+
+      if (result.quotaFetchFailed) {
+        toast.warning('Quota information temporarily unavailable', {
+          description:
+            'Categorization succeeded, but quota info may be outdated. Refreshing...',
+        });
+      }
+
       onCategorizeComplete?.(result);
 
       await refetchQuota();
