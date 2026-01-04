@@ -1,10 +1,11 @@
 'use client';
 
+import { Calendar, Play } from 'lucide-react';
 import { motion } from 'motion/react';
 import Image from 'next/image';
 import { Badge } from '~/components/ui/badge';
 import { cn } from '~/lib/utils';
-import type { SerializedVideo } from '~/types/video';
+import { type SerializedVideo, formatPublishedDate } from '~/types/video';
 
 interface VideoCardProps {
   video: SerializedVideo;
@@ -14,25 +15,30 @@ interface VideoCardProps {
 
 export function VideoCard({ video, className, priority }: VideoCardProps) {
   const youtubeUrl = `https://www.youtube.com/watch?v=${video.youtubeId}`;
+  const publishedDate = formatPublishedDate(video.publishedAt);
 
   return (
     <motion.a
       href={youtubeUrl}
       target="_blank"
       rel="noopener noreferrer"
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
-      whileHover={{ y: -4 }}
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      whileHover={{ scale: 1.02 }}
+      whileTap={{ scale: 0.98 }}
+      transition={{
+        type: 'spring',
+        stiffness: 300,
+        damping: 20,
+      }}
       className={cn(
-        'group relative flex flex-col overflow-hidden rounded-2xl border border-border/50 bg-card',
-        'shadow-sm transition-all duration-500 ease-out',
-        'hover:border-ring/60 hover:shadow-xl hover:shadow-primary/5 dark:hover:shadow-primary/10',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+        'group relative flex flex-col overflow-hidden rounded-3xl border-2 border-primary/20 bg-card',
+        'shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.2)]',
         className
       )}
     >
-      <div className="relative aspect-video w-full overflow-hidden bg-gradient-to-br from-muted/50 to-muted">
+      {/* Thumbnail Container */}
+      <div className="relative aspect-video w-full overflow-hidden bg-muted/30">
         {video.thumbnailUrl ? (
           <>
             <Image
@@ -40,71 +46,62 @@ export function VideoCard({ video, className, priority }: VideoCardProps) {
               alt={video.title}
               fill
               priority={priority}
-              className="object-cover transition-transform duration-700 ease-out group-hover:scale-110"
+              className="object-cover transition-transform duration-500 group-hover:scale-110"
               sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
+            {/* Dark overlay on hover */}
+            <div className="absolute inset-0 bg-black/20 opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
           </>
         ) : (
-          <div className="flex h-full items-center justify-center bg-gradient-to-br from-muted to-muted/50">
-            <svg
-              className="h-12 w-12 text-muted-foreground/40 transition-transform duration-300 group-hover:scale-110"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={1.5}
-                d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"
-              />
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={1.5}
-                d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
-            </svg>
+          <div className="flex h-full items-center justify-center bg-secondary/50">
+            <Play className="h-12 w-12 text-muted-foreground/40" />
           </div>
         )}
 
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className="scale-0 rounded-full bg-red-600 p-4 opacity-0 shadow-2xl ring-4 ring-red-600/20 transition-all duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] group-hover:scale-100 group-hover:opacity-100">
-            <svg
-              className="h-7 w-7 text-white"
-              fill="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path d="M8 5v14l11-7z" />
-            </svg>
-          </div>
+        {/* Play Button Overlay - Pops in center */}
+        <div className="absolute inset-0 flex items-center justify-center opacity-0 transition-opacity duration-300 group-hover:opacity-100">
+          <motion.div
+            initial={{ scale: 0.5, rotate: -10 }}
+            whileHover={{ scale: 1.1, rotate: 0 }}
+            className="flex h-14 w-14 items-center justify-center rounded-full bg-white/90 text-primary shadow-lg backdrop-blur-sm dark:bg-black/80"
+          >
+            <Play className="ml-1 h-6 w-6 fill-current" />
+          </motion.div>
         </div>
 
-        <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-card via-card/80 to-transparent opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
-      </div>
-
-      <div className="flex flex-1 flex-col gap-3 p-5">
-        <h3 className="line-clamp-2 text-sm font-semibold leading-snug text-foreground transition-colors duration-300 group-hover:text-primary">
-          {video.title}
-        </h3>
-
-        {video.channelName && (
-          <p className="truncate text-xs font-medium text-muted-foreground/80 transition-colors duration-300 group-hover:text-muted-foreground">
-            {video.channelName}
-          </p>
-        )}
-
+        {/* Floating Category Badge (Sticker style) */}
         {video.categoryName && (
-          <div className="mt-auto pt-1">
+          <div className="absolute right-3 top-3 z-10">
             <Badge
               variant="secondary"
-              className="w-fit text-xs font-medium shadow-sm transition-all duration-300 group-hover:shadow-md"
+              className="rotate-2 border-none bg-white/90 text-xs font-bold text-primary shadow-sm backdrop-blur-md transition-transform duration-300 group-hover:rotate-0 dark:bg-black/80"
             >
               {video.categoryName}
             </Badge>
           </div>
         )}
+      </div>
+
+      {/* Content */}
+      <div className="flex flex-1 flex-col gap-3 p-5">
+        <h3 className="line-clamp-2 font-bold leading-tight tracking-tight text-foreground/90 group-hover:text-primary">
+          {video.title}
+        </h3>
+
+        <div className="mt-auto flex items-center justify-between gap-2 border-t border-border/50 pt-3 text-xs text-muted-foreground">
+          <div className="flex items-center gap-1.5 truncate font-medium">
+            <span className="truncate hover:text-foreground">
+              {video.channelName}
+            </span>
+          </div>
+
+          {publishedDate && (
+            <div className="flex shrink-0 items-center gap-1 opacity-70">
+              <Calendar className="h-3 w-3" />
+              <span>{publishedDate}</span>
+            </div>
+          )}
+        </div>
       </div>
     </motion.a>
   );

@@ -119,7 +119,6 @@ export function SyncButton({
       onSyncComplete?.(result);
 
       await fetchSyncStatus();
-      await handleCategorize();
       setTimeout(() => setStatus(null), 3000);
     } catch (error) {
       const errorMessage =
