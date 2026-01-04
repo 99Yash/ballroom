@@ -15,6 +15,7 @@ import { parseAsInteger, parseAsString, useQueryState } from 'nuqs';
 import * as React from 'react';
 import { toast } from 'sonner';
 import { CategoryManager } from '~/components/category-manager';
+import { QuotaDisplay } from '~/components/quota-display';
 import { SyncButton } from '~/components/sync-button';
 import { Button } from '~/components/ui/button';
 import { Input } from '~/components/ui/input';
@@ -300,7 +301,9 @@ export function DashboardClient({
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.3 }}
+            className="flex items-center gap-3"
           >
+            <QuotaDisplay />
             <Button
               variant="ghost"
               onClick={handleSignOut}

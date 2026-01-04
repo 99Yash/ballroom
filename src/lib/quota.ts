@@ -331,33 +331,42 @@ export async function checkAndIncrementQuotaWithinTx(
       .update(user)
       .set(buildQuotaIncrementUpdate(quotaType, amount))
       .where(
-        and(eq(user.id, userId), buildQuotaLimitCheckCondition(quotaType, amount))
+        and(
+          eq(user.id, userId),
+          buildQuotaLimitCheckCondition(quotaType, amount)
+        )
       );
 
     const retryRowsAffected = retryResult.rowCount ?? 0;
     if (retryRowsAffected === 0) {
-      logger.error('Quota update failed after retry due to concurrent modification', {
-        userId,
-        quotaType,
-        amount,
-        recheckUsed,
-        recheckLimit,
-      });
+      logger.error(
+        'Quota update failed after retry due to concurrent modification',
+        {
+          userId,
+          quotaType,
+          amount,
+          recheckUsed,
+          recheckLimit,
+        }
+      );
 
       throw new AppError({
-        code: 'INTERNAL_ERROR',
+        code: 'INTERNAL_SERVER_ERROR',
         message:
           'Failed to update quota due to a concurrent update. Please retry the request.',
       });
     }
 
-    logger.warn('Quota update race condition detected and resolved with retry', {
-      userId,
-      quotaType,
-      amount,
-      recheckUsed,
-      recheckLimit,
-    });
+    logger.warn(
+      'Quota update race condition detected and resolved with retry',
+      {
+        userId,
+        quotaType,
+        amount,
+        recheckUsed,
+        recheckLimit,
+      }
+    );
   }
 
   logger.debug('Quota checked and incremented atomically in transaction', {

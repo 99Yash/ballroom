@@ -9,6 +9,36 @@ import {
 } from './quota';
 import { fetchLikedVideos, type YouTubeVideo } from './youtube';
 
+// Track consecutive failures per user for monitoring
+const lastSeenAtFailureCounts = new Map<string, number>();
+
+/**
+ * Retries a function with exponential backoff.
+ * @param fn - Function to retry
+ * @param maxAttempts - Maximum number of attempts (default: 3)
+ * @param initialDelayMs - Initial delay in milliseconds (default: 100)
+ * @returns Result of the function or throws the last error
+ */
+async function retryWithBackoff<T>(
+  fn: () => Promise<T>,
+  maxAttempts: number = 3,
+  initialDelayMs: number = 100
+): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+      if (attempt < maxAttempts) {
+        const delayMs = initialDelayMs * Math.pow(2, attempt - 1);
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+      }
+    }
+  }
+  throw lastError;
+}
+
 export interface ProgressiveSyncOptions {
   initialLimit?: number;
   maxDepth?: number;
@@ -209,13 +239,40 @@ export async function progressiveSync(
     }
 
     try {
-      await updateLastSeenAt(userId, youtubeIds);
+      // Retry with exponential backoff (3 attempts: 100ms, 200ms, 400ms)
+      await retryWithBackoff(
+        () => updateLastSeenAt(userId, youtubeIds),
+        3,
+        100
+      );
+      // Reset failure count on success
+      lastSeenAtFailureCounts.delete(userId);
     } catch (error) {
+      // Increment failure count for monitoring
+      const failureCount = (lastSeenAtFailureCounts.get(userId) || 0) + 1;
+      lastSeenAtFailureCounts.set(userId, failureCount);
+
+      // Log error with failure count
       logger.error('Failed to update lastSeenAt after video sync batch', {
         userId,
         youtubeIdCount: youtubeIds.length,
+        consecutiveFailures: failureCount,
         error: error instanceof Error ? error.message : String(error),
       });
+
+      // Warn if failures are accumulating (potential persistent issue)
+      if (failureCount >= 3) {
+        logger.warn(
+          'Persistent lastSeenAt update failures detected - may affect unliked video detection',
+          {
+            userId,
+            consecutiveFailures: failureCount,
+            recommendation:
+              'Check database connectivity and performance. Stale lastSeenAt values will be corrected in future syncs, but unliked detection may be inaccurate until resolved.',
+          }
+        );
+      }
+
       // Intentionally do not rethrow: videos are already saved and quota consumed,
       // and a stale lastSeenAt will be corrected in future syncs.
     }

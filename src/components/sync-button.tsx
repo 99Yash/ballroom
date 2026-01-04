@@ -21,7 +21,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '~/components/ui/tooltip';
-import { APP_CONFIG } from '~/lib/constants';
+import { isQuotaExceeded, isQuotaLow, useQuota } from '~/hooks/use-quota';
 import { cn } from '~/lib/utils';
 
 interface SyncButtonProps {
@@ -34,19 +34,6 @@ interface SyncStatus {
   totalVideos: number;
 }
 
-interface QuotaInfo {
-  used: number;
-  limit: number;
-  remaining: number;
-  percentageUsed: number;
-  resetAt: string | null;
-}
-
-interface QuotaState {
-  sync: QuotaInfo;
-  categorize: QuotaInfo;
-}
-
 const isDevelopment = process.env.NODE_ENV === 'development';
 
 export function SyncButton({
@@ -57,7 +44,7 @@ export function SyncButton({
   const [isCategorizing, setIsCategorizing] = React.useState(false);
   const [status, setStatus] = React.useState<string | null>(null);
   const [syncStatus, setSyncStatus] = React.useState<SyncStatus | null>(null);
-  const [quota, setQuota] = React.useState<QuotaState | null>(null);
+  const { quota, refetch: refetchQuota } = useQuota();
 
   const fetchSyncStatus = React.useCallback(async () => {
     try {
@@ -71,22 +58,9 @@ export function SyncButton({
     }
   }, []);
 
-  const fetchQuota = React.useCallback(async () => {
-    try {
-      const response = await fetch('/api/quota');
-      if (response.ok) {
-        const data = await response.json();
-        setQuota(data);
-      }
-    } catch {
-      // Quota is optional
-    }
-  }, []);
-
   React.useEffect(() => {
     fetchSyncStatus();
-    fetchQuota();
-  }, [fetchSyncStatus, fetchQuota]);
+  }, [fetchSyncStatus]);
 
   const handleSync = async (mode: 'quick' | 'extended') => {
     setIsSyncing(true);
@@ -107,10 +81,6 @@ export function SyncButton({
 
       const result = await response.json();
 
-      if (result.quota) {
-        setQuota(result.quota);
-      }
-
       const message =
         result.new > 0
           ? `Synced ${result.new} new videos`
@@ -120,7 +90,7 @@ export function SyncButton({
       toast.success('Sync complete', { description: message });
       onSyncComplete?.(result);
 
-      await fetchSyncStatus();
+      await Promise.all([fetchSyncStatus(), refetchQuota()]);
       setTimeout(() => setStatus(null), 3000);
     } catch (error) {
       const errorMessage =
@@ -158,7 +128,7 @@ export function SyncButton({
       setTimeout(() => {
         setStatus(null);
         fetchSyncStatus();
-        fetchQuota();
+        refetchQuota();
       }, 5000);
     } catch (error) {
       const errorMessage =
@@ -188,10 +158,6 @@ export function SyncButton({
 
       const result = await response.json();
 
-      if (result.quota) {
-        setQuota(result.quota);
-      }
-
       const message =
         result.categorized > 0
           ? `Categorized ${result.categorized} videos`
@@ -201,6 +167,7 @@ export function SyncButton({
       toast.success('Categorization complete', { description: message });
       onCategorizeComplete?.(result);
 
+      await refetchQuota();
       setTimeout(() => setStatus(null), 3000);
     } catch (error) {
       const errorMessage =
@@ -222,10 +189,10 @@ export function SyncButton({
     ? `${quota.categorize.remaining}/${quota.categorize.limit}`
     : null;
 
-  const isCategorizeQuotaLow =
-    quota &&
-    quota.categorize.percentageUsed >= APP_CONFIG.quota.warningThreshold;
-  const isCategorizeQuotaExceeded = quota && quota.categorize.remaining <= 0;
+  const isCategorizeQuotaLow = quota ? isQuotaLow(quota.categorize) : false;
+  const isCategorizeQuotaExceeded = quota
+    ? isQuotaExceeded(quota.categorize)
+    : false;
 
   return (
     <div className="flex w-full flex-col items-start gap-2">
