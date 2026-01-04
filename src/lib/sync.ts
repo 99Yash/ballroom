@@ -203,7 +203,17 @@ export async function progressiveSync(
       consecutiveExistingBatches++;
     }
 
-    await updateLastSeenAt(userId, youtubeIds);
+    try {
+      await updateLastSeenAt(userId, youtubeIds);
+    } catch (error) {
+      logger.error('Failed to update lastSeenAt after video sync batch', {
+        userId,
+        youtubeIdCount: youtubeIds.length,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      // Intentionally do not rethrow: videos are already saved and quota consumed,
+      // and a stale lastSeenAt will be corrected in future syncs.
+    }
 
     totalFetched += fetchedVideos.length;
     pageToken = nextPageToken;
