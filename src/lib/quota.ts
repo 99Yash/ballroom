@@ -325,12 +325,38 @@ export async function checkAndIncrementQuotaWithinTx(
       });
     }
 
-    // If we get here, it's likely a race condition that was resolved
-    // Log it but don't throw - the quota check passed on recheck
-    logger.warn('Quota update race condition detected and resolved', {
+    // If we get here, it's likely a race condition: the conditional update failed
+    // even though the recheck shows sufficient quota remains. Retry once.
+    const retryResult = await tx
+      .update(user)
+      .set(buildQuotaIncrementUpdate(quotaType, amount))
+      .where(
+        and(eq(user.id, userId), buildQuotaLimitCheckCondition(quotaType, amount))
+      );
+
+    const retryRowsAffected = retryResult.rowCount ?? 0;
+    if (retryRowsAffected === 0) {
+      logger.error('Quota update failed after retry due to concurrent modification', {
+        userId,
+        quotaType,
+        amount,
+        recheckUsed,
+        recheckLimit,
+      });
+
+      throw new AppError({
+        code: 'INTERNAL_ERROR',
+        message:
+          'Failed to update quota due to a concurrent update. Please retry the request.',
+      });
+    }
+
+    logger.warn('Quota update race condition detected and resolved with retry', {
       userId,
       quotaType,
       amount,
+      recheckUsed,
+      recheckLimit,
     });
   }
 
