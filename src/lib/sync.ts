@@ -3,7 +3,10 @@ import { db } from '~/db';
 import { videos } from '~/db/schemas';
 import { APP_CONFIG, VIDEO_SYNC_STATUS } from './constants';
 import { logger } from './logger';
-import { checkAndIncrementQuotaWithinTx } from './quota';
+import {
+  checkAndIncrementQuotaWithinTx,
+  incrementQuotaWithinTx,
+} from './quota';
 import { fetchLikedVideos, type YouTubeVideo } from './youtube';
 
 export interface ProgressiveSyncOptions {
@@ -90,8 +93,8 @@ const defaultOptions: Required<ProgressiveSyncOptions> = {
  *   to prevent unbounded syncs. The sync will stop when this limit is reached.
  * @param options.checkQuota - Whether to check and enforce quota limits before
  *   inserting new videos. Default: `true`. When `false`, quota checks are skipped
- *   and quota is NOT incremented (useful for admin/internal operations that should
- *   not count against user quotas).
+ *   but quota is still incremented for tracking purposes (useful for admin/internal
+ *   operations that should not be limited but still tracked).
  *
  * @returns A promise that resolves to a `SyncResult` object containing:
  *   - `synced`: Total number of videos fetched from YouTube (new + existing)
@@ -261,7 +264,8 @@ export async function progressiveSync(
  * @param userId - The user ID to insert videos for
  * @param newVideos - Array of YouTube videos to insert
  * @param shouldCheckQuota - If true, checks quota limits and increments quota.
- *   If false, quota is not checked or incremented (for admin/internal operations).
+ *   If false, quota limits are not checked but quota is still incremented for
+ *   tracking purposes (for admin/internal operations that should not be limited).
  */
 async function insertNewVideosAndIncrementQuota(
   userId: string,
@@ -273,28 +277,45 @@ async function insertNewVideosAndIncrementQuota(
   const now = new Date();
 
   await db.transaction(async (tx) => {
-    await tx.insert(videos).values(
-      newVideos.map((v) => ({
-        userId,
-        youtubeId: v.youtubeId,
-        title: v.title,
-        description: v.description,
-        thumbnailUrl: v.thumbnailUrl,
-        channelName: v.channelName,
-        channelId: v.channelId,
-        publishedAt: v.publishedAt,
-        syncStatus: VIDEO_SYNC_STATUS.ACTIVE,
-        lastSeenAt: now,
-      }))
-    );
+    // Use ON CONFLICT DO NOTHING to handle race conditions gracefully
+    // If a video already exists (due to concurrent sync), it will be silently skipped
+    // This prevents unique constraint violations
+    // The rowCount tells us how many videos were actually inserted (not skipped)
+    const insertResult = await tx
+      .insert(videos)
+      .values(
+        newVideos.map((v) => ({
+          userId,
+          youtubeId: v.youtubeId,
+          title: v.title,
+          description: v.description,
+          thumbnailUrl: v.thumbnailUrl,
+          channelName: v.channelName,
+          channelId: v.channelId,
+          publishedAt: v.publishedAt,
+          syncStatus: VIDEO_SYNC_STATUS.ACTIVE,
+          lastSeenAt: now,
+        }))
+      )
+      .onConflictDoNothing({
+        target: [videos.userId, videos.youtubeId],
+      });
 
-    if (shouldCheckQuota) {
-      await checkAndIncrementQuotaWithinTx(
-        tx,
-        userId,
-        'sync',
-        newVideos.length
-      );
+    // rowCount tells us how many videos were actually inserted (duplicates are skipped)
+    // This ensures quota is only incremented for videos that were actually inserted
+    const actuallyInserted = insertResult.rowCount ?? 0;
+
+    if (actuallyInserted > 0) {
+      if (shouldCheckQuota) {
+        await checkAndIncrementQuotaWithinTx(
+          tx,
+          userId,
+          'sync',
+          actuallyInserted
+        );
+      } else {
+        await incrementQuotaWithinTx(tx, userId, 'sync', actuallyInserted);
+      }
     }
   });
 }
