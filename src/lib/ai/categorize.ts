@@ -3,7 +3,7 @@ import { generateObject } from 'ai';
 import { and, eq, inArray, isNull, lt, or } from 'drizzle-orm';
 import * as z from 'zod/v4';
 import { db } from '~/db';
-import { categories, DatabaseVideo, videos } from '~/db/schemas';
+import { categories, videos } from '~/db/schemas';
 import { VIDEO_SYNC_STATUS } from '~/lib/constants';
 import { logger } from '~/lib/logger';
 import { checkAndIncrementQuotaWithinTx } from '~/lib/quota';
@@ -307,10 +307,7 @@ export async function categorizeUserVideos(
     latestCategoryUpdate
   );
 
-  const videosToAnalyze = await db
-    .select()
-    .from(videos)
-    .where(whereCondition);
+  const videosToAnalyze = await db.select().from(videos).where(whereCondition);
 
   if (videosToAnalyze.length === 0) {
     return { categorized: 0, total: 0, skipped: 0 };
@@ -348,9 +345,7 @@ export async function categorizeUserVideos(
     (c) => !videoIdsSet.has(c.videoId)
   );
 
-  const categorizedVideoIds = new Set(
-    categorizations.map((c) => c.videoId)
-  );
+  const categorizedVideoIds = new Set(categorizations.map((c) => c.videoId));
   const uncategorizedVideoIds = videosToAnalyze.filter(
     (v) => !categorizedVideoIds.has(v.id)
   );
@@ -381,8 +376,7 @@ export async function categorizeUserVideos(
   const categorizationMap = new Map(
     categorizations
       .filter(
-        (c) =>
-          validCategoryIds.has(c.categoryId) && videoIdsSet.has(c.videoId)
+        (c) => validCategoryIds.has(c.categoryId) && videoIdsSet.has(c.videoId)
       )
       .map((c) => [c.videoId, c.categoryId])
   );

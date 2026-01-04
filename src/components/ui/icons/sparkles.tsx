@@ -91,11 +91,10 @@ const SparklesIcon = React.forwardRef<SparklesIconHandle, SparklesIconProps>(
         if (isControlledRef.current || animate) {
           onMouseEnter?.(e);
         } else {
-          sparkleControls.start('hover');
-          starControls.start('blink', { delay: 1 });
+          startAnimation();
         }
       },
-      [onMouseEnter, sparkleControls, starControls, animate]
+      [onMouseEnter, animate, startAnimation]
     );
 
     const handleMouseLeave = React.useCallback(
@@ -103,11 +102,10 @@ const SparklesIcon = React.forwardRef<SparklesIconHandle, SparklesIconProps>(
         if (isControlledRef.current || animate) {
           onMouseLeave?.(e);
         } else {
-          sparkleControls.start('initial');
-          starControls.start('initial');
+          stopAnimation();
         }
       },
-      [sparkleControls, starControls, onMouseLeave, animate]
+      [onMouseLeave, animate, stopAnimation]
     );
 
     return (
