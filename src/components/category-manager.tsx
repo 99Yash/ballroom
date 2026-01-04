@@ -13,7 +13,6 @@ import {
 import { Input } from '~/components/ui/input';
 import { Modal } from '~/components/ui/modal';
 import { Spinner } from '~/components/ui/spinner';
-import { TruncatedText } from '~/components/ui/truncated-text';
 import type { Category } from '~/types/category';
 
 interface CategoryManagerProps {
@@ -151,12 +150,12 @@ export function CategoryManager({
                   className="flex items-center justify-between rounded-lg border bg-card p-3 gap-2"
                 >
                   <div className="flex items-center gap-2 min-w-0">
-                    <TruncatedText
-                      as="span"
+                    <span
                       className="text-sm font-medium truncate"
+                      title={category.name}
                     >
                       {category.name}
-                    </TruncatedText>
+                    </span>
                     {category.isDefault && (
                       <Badge variant="secondary" className="text-xs shrink-0">
                         Default

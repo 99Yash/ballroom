@@ -5,7 +5,6 @@ import Image from 'next/image';
 import { Badge } from '~/components/ui/badge';
 import { CalendarDaysIcon } from '~/components/ui/icons/calendar-days';
 import { PlayIcon } from '~/components/ui/icons/play';
-import { TruncatedText } from '~/components/ui/truncated-text';
 import { cn } from '~/lib/utils';
 import { type SerializedVideo, formatPublishedDate } from '~/types/video';
 
@@ -17,7 +16,9 @@ interface VideoCardProps {
 
 export function VideoCard({ video, className, priority }: VideoCardProps) {
   const youtubeUrl = `https://www.youtube.com/watch?v=${video.youtubeId}`;
-  const publishedDate = video.publishedAt ? formatPublishedDate(video.publishedAt) : null;
+  const publishedDate = video.publishedAt
+    ? formatPublishedDate(video.publishedAt)
+    : null;
 
   return (
     <motion.a
@@ -82,18 +83,21 @@ export function VideoCard({ video, className, priority }: VideoCardProps) {
 
       {/* Content */}
       <div className="flex flex-1 flex-col gap-3 p-5">
-        <TruncatedText
-          as="h3"
+        <h3
           className="line-clamp-2 font-bold leading-tight tracking-tight text-foreground/90 group-hover:text-primary"
+          title={video.title}
         >
           {video.title}
-        </TruncatedText>
+        </h3>
 
         <div className="mt-auto flex items-center justify-between gap-2 border-t border-border/50 pt-3 text-xs text-muted-foreground">
           <div className="flex items-center gap-1.5 truncate font-medium">
-            <TruncatedText as="span" className="truncate hover:text-foreground">
+            <span
+              className="truncate hover:text-foreground"
+              title={video.channelName ?? undefined}
+            >
               {video.channelName}
-            </TruncatedText>
+            </span>
           </div>
 
           {publishedDate && (

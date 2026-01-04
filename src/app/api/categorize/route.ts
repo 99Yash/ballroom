@@ -1,10 +1,9 @@
-import { and, count, eq, isNull, lt, or } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
 import { db } from '~/db';
-import { categories, videos } from '~/db/schemas';
+import { categories } from '~/db/schemas';
 import { categorizeUserVideos } from '~/lib/ai/categorize';
 import { requireSession } from '~/lib/auth/session';
-import { VIDEO_SYNC_STATUS } from '~/lib/constants';
 import { AppError, createErrorResponse } from '~/lib/errors';
 import { logger } from '~/lib/logger';
 import {
@@ -38,37 +37,7 @@ export async function POST(request: Request) {
       });
     }
 
-    const latestCategoryUpdate = userCategories.reduce((latest, category) => {
-      const updatedAt = category.updatedAt;
-      if (!updatedAt) return latest;
-      return updatedAt > latest ? updatedAt : latest;
-    }, new Date(0));
-
-    // Use count() instead of selecting all IDs for better performance
-    // This avoids loading potentially thousands of IDs into memory
-    const videosToAnalyzeResult = await db
-      .select({ count: count() })
-      .from(videos)
-      .where(
-        force
-          ? and(
-              eq(videos.userId, session.user.id),
-              eq(videos.syncStatus, VIDEO_SYNC_STATUS.ACTIVE)
-            )
-          : and(
-              eq(videos.userId, session.user.id),
-              eq(videos.syncStatus, VIDEO_SYNC_STATUS.ACTIVE),
-              or(
-                isNull(videos.categoryId),
-                isNull(videos.lastAnalyzedAt),
-                lt(videos.lastAnalyzedAt, latestCategoryUpdate)
-              )
-            )
-      );
-
-    const videosToAnalyzeCount = videosToAnalyzeResult[0]?.count ?? 0;
-
-    // Check quota status early for consistency, even when there are no videos to categorize
+    // Check quota status early for consistency
     await checkAndResetQuotaIfNeeded(session.user.id);
     let quotas = null;
     try {
@@ -77,9 +46,27 @@ export async function POST(request: Request) {
       logger.warn('Failed to fetch quotas', { quotaError });
     }
 
-    if (videosToAnalyzeCount === 0) {
-      // Even though there are no videos to categorize, we check quota for consistency
-      // and to provide users with quota status information
+    // Validate quota before processing videos
+    if (quotas?.categorize.isExceeded) {
+      const daysUntilReset = quotas.categorize.resetAt
+        ? Math.ceil(
+            (quotas.categorize.resetAt.getTime() - Date.now()) /
+              (1000 * 60 * 60 * 24)
+          )
+        : 0;
+
+      throw new AppError({
+        code: 'QUOTA_EXCEEDED',
+        message: `Categorization quota exceeded. Used: ${quotas.categorize.used}/${quotas.categorize.limit}. Resets in ${daysUntilReset} days.`,
+      });
+    }
+
+    // categorizeUserVideos now handles the video fetching internally
+    // This eliminates the duplicate COUNT query that was previously done here
+    const result = await categorizeUserVideos(session.user.id, force);
+
+    // Handle early return if no videos to categorize
+    if (result.total === 0) {
       const quotaExceeded = quotas?.categorize.isExceeded ?? false;
       const message = quotaExceeded
         ? 'All videos are already categorized. Note: Your categorization quota has been exceeded.'
@@ -103,23 +90,6 @@ export async function POST(request: Request) {
 
       return response;
     }
-
-    // Validate quota before processing videos
-    if (quotas?.categorize.isExceeded) {
-      const daysUntilReset = quotas.categorize.resetAt
-        ? Math.ceil(
-            (quotas.categorize.resetAt.getTime() - Date.now()) /
-              (1000 * 60 * 60 * 24)
-          )
-        : 0;
-
-      throw new AppError({
-        code: 'QUOTA_EXCEEDED',
-        message: `Categorization quota exceeded. Used: ${quotas.categorize.used}/${quotas.categorize.limit}. Resets in ${daysUntilReset} days.`,
-      });
-    }
-
-    const result = await categorizeUserVideos(session.user.id, force);
 
     // Refresh quotas after categorization (in case they changed)
     try {

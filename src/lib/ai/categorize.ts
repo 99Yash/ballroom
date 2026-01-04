@@ -234,6 +234,44 @@ export interface CategorizeResult {
 }
 
 /**
+ * Build the where condition for videos that need categorization
+ * This is extracted to avoid duplicating the logic between count and select queries
+ */
+function buildVideosToAnalyzeCondition(
+  userId: string,
+  force: boolean,
+  latestCategoryUpdate: Date | null
+) {
+  const baseCondition = and(
+    eq(videos.userId, userId),
+    eq(videos.syncStatus, VIDEO_SYNC_STATUS.ACTIVE)
+  );
+
+  if (force) {
+    return baseCondition;
+  }
+
+  // If no category has been updated (all updatedAt are null),
+  // only check for uncategorized or never-analyzed videos
+  if (latestCategoryUpdate === null) {
+    return and(
+      baseCondition,
+      or(isNull(videos.categoryId), isNull(videos.lastAnalyzedAt))
+    );
+  }
+
+  // Otherwise, also check if videos were analyzed before the latest category update
+  return and(
+    baseCondition,
+    or(
+      isNull(videos.categoryId),
+      isNull(videos.lastAnalyzedAt),
+      lt(videos.lastAnalyzedAt, latestCategoryUpdate)
+    )
+  );
+}
+
+/**
  * Categorize all uncategorized videos for a user
  * This is a reusable function that can be called from API routes or background jobs
  */
@@ -251,48 +289,38 @@ export async function categorizeUserVideos(
     return { categorized: 0, total: 0, skipped: 0 };
   }
 
-  const latestCategoryUpdate = userCategories.reduce((latest, category) => {
-    const updatedAt = category.updatedAt;
-    if (!updatedAt) return latest;
-    return updatedAt > latest ? updatedAt : latest;
-  }, new Date(0));
+  // Find the latest category update timestamp
+  // If no category has an updatedAt, this will be null
+  const latestCategoryUpdate = userCategories.reduce<Date | null>(
+    (latest, category) => {
+      const updatedAt = category.updatedAt;
+      if (!updatedAt) return latest;
+      if (latest === null) return updatedAt;
+      return updatedAt > latest ? updatedAt : latest;
+    },
+    null
+  );
 
-  let videosToAnalyze: DatabaseVideo[] = [];
+  const whereCondition = buildVideosToAnalyzeCondition(
+    userId,
+    force,
+    latestCategoryUpdate
+  );
+
+  const videosToAnalyze = await db
+    .select()
+    .from(videos)
+    .where(whereCondition);
+
+  if (videosToAnalyze.length === 0) {
+    return { categorized: 0, total: 0, skipped: 0 };
+  }
 
   if (force) {
-    videosToAnalyze = await db
-      .select()
-      .from(videos)
-      .where(
-        and(
-          eq(videos.userId, userId),
-          eq(videos.syncStatus, VIDEO_SYNC_STATUS.ACTIVE)
-        )
-      );
-
     logger.info('Force re-categorization requested', {
       userId,
       totalVideos: videosToAnalyze.length,
     });
-  } else {
-    videosToAnalyze = await db
-      .select()
-      .from(videos)
-      .where(
-        and(
-          eq(videos.userId, userId),
-          eq(videos.syncStatus, VIDEO_SYNC_STATUS.ACTIVE),
-          or(
-            isNull(videos.categoryId),
-            isNull(videos.lastAnalyzedAt),
-            lt(videos.lastAnalyzedAt, latestCategoryUpdate)
-          )
-        )
-      );
-  }
-
-  if (videosToAnalyze.length === 0) {
-    return { categorized: 0, total: 0, skipped: 0 };
   }
 
   const categorizations = await categorizeVideosInBatches(
