@@ -21,7 +21,9 @@ export async function POST(request: Request) {
     try {
       quotas = await getUserQuotas(session.user.id);
     } catch (quotaError) {
-      logger.warn('Failed to fetch quotas after sync', quotaError, {
+      logger.warn('Failed to fetch quotas after sync', {
+        quotaError,
+        duration: Date.now() - startTime,
         userId: session.user.id,
       });
     }
