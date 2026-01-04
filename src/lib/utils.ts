@@ -242,9 +242,6 @@ export function formatDate(
   }).format(new Date(date));
 }
 
-/**
- * Custom locale for formatDistanceToNowStrict
- */
 const formatDistanceLocale = {
   lessThanXSeconds: 'just now',
   xSeconds: 'just now',
@@ -265,14 +262,12 @@ const formatDistanceLocale = {
 };
 
 function formatDistance(token: string, count: number): string {
-  const result =
+  return (
     formatDistanceLocale[token as keyof typeof formatDistanceLocale]?.replace(
       '{{count}}',
       count.toString()
-    ) ?? token;
-
-  if (result === 'just now') return result;
-  return result;
+    ) ?? token
+  );
 }
 
 /**

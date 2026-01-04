@@ -3,6 +3,7 @@
 import type { Variants } from 'motion/react';
 import { motion, useAnimation } from 'motion/react';
 import * as React from 'react';
+import { useAnimatedIcon } from '~/hooks/use-animated-icon';
 import { cn } from '~/lib/utils';
 
 export interface ArrowRightIconHandle {
@@ -56,13 +57,7 @@ const ArrowRightIcon = React.forwardRef<
     };
   });
 
-  React.useEffect(() => {
-    if (animate && !isControlledRef.current) {
-      controls.start('animate');
-    } else if (!animate && !isControlledRef.current) {
-      controls.start('normal');
-    }
-  }, [animate, controls]);
+  useAnimatedIcon(controls, animate, isControlledRef);
 
   const handleMouseEnter = React.useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {

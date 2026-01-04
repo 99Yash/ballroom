@@ -1,7 +1,6 @@
 'use client';
 
 import { format } from 'date-fns';
-import { formatTimeToNow } from '~/lib/utils';
 import { BarChart3, RefreshCw, Wand2 } from 'lucide-react';
 import * as React from 'react';
 import { Badge } from '~/components/ui/badge';
@@ -16,8 +15,8 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '~/components/ui/tooltip';
-import { cn } from '~/lib/utils';
 import { isQuotaExceeded, isQuotaLow, useQuota } from '~/hooks/use-quota';
+import { cn, formatTimeToNow } from '~/lib/utils';
 
 function QuotaItem({
   label,

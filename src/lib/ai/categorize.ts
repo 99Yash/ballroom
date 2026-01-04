@@ -251,8 +251,6 @@ function buildVideosToAnalyzeCondition(
     return baseCondition;
   }
 
-  // If no category has been updated (all updatedAt are null),
-  // only check for uncategorized or never-analyzed videos
   if (latestCategoryUpdate === null) {
     return and(
       baseCondition,
@@ -260,7 +258,6 @@ function buildVideosToAnalyzeCondition(
     );
   }
 
-  // Otherwise, also check if videos were analyzed before the latest category update
   return and(
     baseCondition,
     or(
@@ -289,8 +286,6 @@ export async function categorizeUserVideos(
     return { categorized: 0, total: 0, skipped: 0 };
   }
 
-  // Find the latest category update timestamp
-  // If no category has an updatedAt, this will be null
   const latestCategoryUpdate = userCategories.reduce<Date | null>(
     (latest, category) => {
       const updatedAt = category.updatedAt;

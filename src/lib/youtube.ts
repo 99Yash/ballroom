@@ -214,7 +214,7 @@ export async function fetchLikedVideos(
         });
       }
 
-      if (apiError.code === 401 || apiError.code === 403) {
+      if (apiError.code === 401) {
         logger.error('YouTube API authentication failed', {
           userId,
           code: apiError.code,
@@ -227,15 +227,25 @@ export async function fetchLikedVideos(
         });
       }
 
-      if (
-        apiError.code === 403 &&
-        apiError.message?.toLowerCase().includes('quota')
-      ) {
-        logger.error('YouTube API quota exceeded', { userId });
-        throw new AppError({
-          code: 'TOO_MANY_REQUESTS',
+      if (apiError.code === 403) {
+        if (apiError.message?.toLowerCase().includes('quota')) {
+          logger.error('YouTube API quota exceeded', { userId });
+          throw new AppError({
+            code: 'TOO_MANY_REQUESTS',
+            message:
+              'YouTube API quota exceeded. Please try again later or contact support.',
+            cause: error,
+          });
+        }
+
+        logger.error('YouTube API access forbidden', {
+          userId,
+          code: apiError.code,
+        });
+        throw new AuthenticationError({
           message:
-            'YouTube API quota exceeded. Please try again later or contact support.',
+            'YouTube API access forbidden. Please re-authenticate with Google.',
+          authErrorType: AUTH_ERROR_TYPES.TOKEN_EXPIRED,
           cause: error,
         });
       }

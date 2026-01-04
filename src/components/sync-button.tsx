@@ -33,8 +33,6 @@ interface SyncStatus {
   totalVideos: number;
 }
 
-// TODO: This module-level check won't tree-shake well. The full sync button will be included in the production bundle even if hidden.
-// Consider using a build-time constant (e.g., via webpack DefinePlugin or Next.js env replacement) or dynamic import to fully exclude dev-only features.
 const isDevelopment = process.env.NODE_ENV === 'development';
 
 export function SyncButton({
@@ -54,9 +52,7 @@ export function SyncButton({
         const data = await response.json();
         setSyncStatus(data);
       }
-    } catch {
-      // Sync status is optional
-    }
+    } catch {}
   }, []);
 
   React.useEffect(() => {

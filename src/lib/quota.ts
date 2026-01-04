@@ -34,22 +34,16 @@ function createQuotaStatus(
   if (limit > 0 && used > 0) {
     const rawPercentage = (used / limit) * 100;
 
-    // Use a single decimal place for better precision while keeping a clean value
     let rounded = Number(rawPercentage.toFixed(1));
 
-    // Ensure small non-zero usage (e.g., 1/50000 = 0.002%) doesn't appear as 0%
-    // but avoid overstating usage as a full 1% for very large quotas
     if (rounded === 0 && rawPercentage > 0) {
       rounded = 0.1;
     }
 
-    // Cap at just under 100% if not exceeded to avoid showing 100% when quota is still available
-    // Only show 100% or more when actually exceeded
     if (!isExceeded && rounded >= 100) {
       rounded = 99.9;
     }
 
-    // Cap at 100% for display purposes when exceeded (e.g., if quota was adjusted)
     if (rounded > 100) {
       rounded = 100;
     }
@@ -67,12 +61,9 @@ function createQuotaStatus(
 }
 
 function getNextQuotaResetDate(): Date {
-  // Use Date.now() to explicitly get UTC milliseconds since epoch
-  // This ensures consistency with SQL's NOW() AT TIME ZONE 'UTC'
   const now = new Date(Date.now());
   const resetDay = APP_CONFIG.quota.resetDayOfMonth;
 
-  // Use UTC for all date operations to ensure consistency
   const utcYear = now.getUTCFullYear();
   const utcMonth = now.getUTCMonth();
 
@@ -225,7 +216,6 @@ export async function checkAndIncrementQuotaWithinTx(
     .set(buildQuotaResetValues(nextResetDate))
     .where(buildQuotaResetNeededCondition(userId));
 
-  // Read current quota values (within transaction for consistency)
   const [userData] = await tx
     .select({
       syncQuotaUsed: user.syncQuotaUsed,
@@ -255,7 +245,6 @@ export async function checkAndIncrementQuotaWithinTx(
     });
   }
 
-  // Increment quota atomically with conditional WHERE clause
   const result = await tx
     .update(user)
     .set(buildQuotaIncrementUpdate(quotaType, amount))
@@ -265,7 +254,6 @@ export async function checkAndIncrementQuotaWithinTx(
 
   const rowsAffected = result.rowCount ?? 0;
   if (rowsAffected === 0) {
-    // Re-check to provide accurate error message (could be user not found or quota exceeded)
     const [recheckData] = await tx
       .select({
         syncQuotaUsed: user.syncQuotaUsed,
@@ -298,7 +286,6 @@ export async function checkAndIncrementQuotaWithinTx(
       });
     }
 
-    // Retry once - conditional update may have failed due to race condition
     const retryResult = await tx
       .update(user)
       .set(buildQuotaIncrementUpdate(quotaType, amount))
