@@ -17,7 +17,14 @@ export async function POST(request: Request) {
     const syncFn = mode === 'extended' ? extendedSync : quickSync;
     const result = await syncFn(session.user.id, { checkQuota: true });
 
-    const quotas = await getUserQuotas(session.user.id);
+    let quotas = null;
+    try {
+      quotas = await getUserQuotas(session.user.id);
+    } catch (quotaError) {
+      logger.warn('Failed to fetch quotas after sync', quotaError, {
+        userId: session.user.id,
+      });
+    }
 
     const response = NextResponse.json({
       synced: result.synced,
@@ -29,7 +36,7 @@ export async function POST(request: Request) {
         result.new > 0
           ? `Synced ${result.new} new videos`
           : 'No new videos found',
-      quota: formatQuotaForClient(quotas),
+      ...(quotas && { quota: formatQuotaForClient(quotas) }),
     });
 
     logger.api('POST', '/api/youtube/sync', {

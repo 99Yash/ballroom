@@ -54,9 +54,10 @@ const defaultOptions: Required<ProgressiveSyncOptions> = {
  *
  * The sync stops early (before reaching `maxDepth`) when:
  * - **Consecutive existing batches**: After fetching at least `initialLimit` videos,
- *   if 2 or more consecutive batches contain only videos that already exist in the
- *   database, the sync stops. This indicates we've likely reached the point where
- *   all newer videos are already synced.
+ *   if the configured number of consecutive batches (default: 2, configurable via
+ *   `APP_CONFIG.sync.consecutiveExistingBatchesThreshold`) contain only videos that
+ *   already exist in the database, the sync stops. This indicates we've likely reached
+ *   the point where all newer videos are already synced.
  * - **No more pages**: When YouTube API returns no `nextPageToken`, indicating
  *   all liked videos have been fetched.
  * - **Empty batch**: When a batch returns zero videos.
@@ -125,9 +126,10 @@ const defaultOptions: Required<ProgressiveSyncOptions> = {
  *
  * @example
  * // Full sync without quota checking (for admin/internal use)
+ * // Note: Uses APP_CONFIG.sync.progressiveMaxDepth (10,000) for both limits
  * const result = await progressiveSync(userId, {
- *   initialLimit: 10000,
- *   maxDepth: 10000,
+ *   initialLimit: APP_CONFIG.sync.progressiveMaxDepth,
+ *   maxDepth: APP_CONFIG.sync.progressiveMaxDepth,
  *   checkQuota: false
  * });
  */
@@ -137,6 +139,8 @@ export async function progressiveSync(
 ): Promise<SyncResult> {
   const opts = { ...defaultOptions, ...options };
   const batchSize = APP_CONFIG.sync.batchSize;
+  const consecutiveThreshold =
+    APP_CONFIG.sync.consecutiveExistingBatchesThreshold;
 
   let totalFetched = 0;
   let totalNew = 0;
@@ -150,6 +154,7 @@ export async function progressiveSync(
     userId,
     initialLimit: opts.initialLimit,
     maxDepth: opts.maxDepth,
+    consecutiveThreshold,
   });
 
   while (totalFetched < opts.maxDepth) {
@@ -223,13 +228,17 @@ export async function progressiveSync(
       break;
     }
 
-    if (totalFetched >= opts.initialLimit && consecutiveExistingBatches >= 2) {
+    if (
+      totalFetched >= opts.initialLimit &&
+      consecutiveExistingBatches >= consecutiveThreshold
+    ) {
       logger.debug(
         'Stopping progressive sync: multiple consecutive existing batches',
         {
           userId,
           totalFetched,
           consecutiveExistingBatches,
+          threshold: consecutiveThreshold,
         }
       );
       break;

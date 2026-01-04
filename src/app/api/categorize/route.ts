@@ -7,7 +7,11 @@ import { requireSession } from '~/lib/auth/session';
 import { VIDEO_SYNC_STATUS } from '~/lib/constants';
 import { AppError, createErrorResponse } from '~/lib/errors';
 import { logger } from '~/lib/logger';
-import { formatQuotaForClient, getUserQuotas } from '~/lib/quota';
+import {
+  checkAndResetQuotaIfNeeded,
+  formatQuotaForClient,
+  getUserQuotas,
+} from '~/lib/quota';
 import {
   categorizeVideosSchema,
   validateRequestBody,
@@ -64,14 +68,29 @@ export async function POST(request: Request) {
 
     const videosToAnalyzeCount = videosToAnalyzeResult[0]?.count ?? 0;
 
+    // Check quota status early for consistency, even when there are no videos to categorize
+    await checkAndResetQuotaIfNeeded(session.user.id);
+    let quotas = null;
+    try {
+      quotas = await getUserQuotas(session.user.id);
+    } catch (quotaError) {
+      logger.warn('Failed to fetch quotas', { quotaError });
+    }
+
     if (videosToAnalyzeCount === 0) {
-      const quotas = await getUserQuotas(session.user.id);
+      // Even though there are no videos to categorize, we check quota for consistency
+      // and to provide users with quota status information
+      const quotaExceeded = quotas?.categorize.isExceeded ?? false;
+      const message = quotaExceeded
+        ? 'All videos are already categorized. Note: Your categorization quota has been exceeded.'
+        : 'All videos are already categorized';
+
       const response = NextResponse.json({
         categorized: 0,
         total: 0,
         skipped: 0,
-        message: 'All videos are already categorized',
-        quota: formatQuotaForClient(quotas),
+        message,
+        ...(quotas && { quota: formatQuotaForClient(quotas) }),
       });
 
       logger.api('POST', '/api/categorize', {
@@ -79,13 +98,39 @@ export async function POST(request: Request) {
         duration: Date.now() - startTime,
         status: 200,
         categorized: 0,
+        quotaExceeded,
       });
 
       return response;
     }
 
+    // Validate quota before processing videos
+    if (quotas?.categorize.isExceeded) {
+      const daysUntilReset = quotas.categorize.resetAt
+        ? Math.ceil(
+            (quotas.categorize.resetAt.getTime() - Date.now()) /
+              (1000 * 60 * 60 * 24)
+          )
+        : 0;
+
+      throw new AppError({
+        code: 'QUOTA_EXCEEDED',
+        message: `Categorization quota exceeded. Used: ${quotas.categorize.used}/${quotas.categorize.limit}. Resets in ${daysUntilReset} days.`,
+      });
+    }
+
     const result = await categorizeUserVideos(session.user.id, force);
-    const quotas = await getUserQuotas(session.user.id);
+
+    // Refresh quotas after categorization (in case they changed)
+    try {
+      quotas = await getUserQuotas(session.user.id);
+    } catch (quotaError) {
+      logger.warn('Failed to fetch quotas after categorization', {
+        quotaError,
+        duration: Date.now() - startTime,
+        userId: session.user.id,
+      });
+    }
 
     const response = NextResponse.json({
       categorized: result.categorized,
@@ -95,7 +140,7 @@ export async function POST(request: Request) {
         result.total > 0
           ? `Categorized ${result.categorized} of ${result.total} videos`
           : 'All videos are already categorized',
-      quota: formatQuotaForClient(quotas),
+      ...(quotas && { quota: formatQuotaForClient(quotas) }),
     });
 
     logger.api('POST', '/api/categorize', {
