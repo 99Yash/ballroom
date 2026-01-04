@@ -18,8 +18,8 @@ export const user = pgTable(
     image: text('image'),
     onboardedAt: timestamp('onboarded_at'),
     // Quota tracking
-    // Note: Default values are hardcoded here to avoid tight coupling with application config.
-    // If quota limits need to change, handle through application logic or migrations.
+    // Note: These are schema-level default values. They may mirror application config
+    // but are not automatically kept in sync; update via migrations and application logic if policy changes.
     syncQuotaUsed: integer('sync_quota_used').default(0).notNull(),
     syncQuotaLimit: integer('sync_quota_limit').default(5_000).notNull(),
     categorizeQuotaUsed: integer('categorize_quota_used').default(0).notNull(),
