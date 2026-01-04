@@ -12,6 +12,7 @@ import { AppError, createErrorResponse } from '~/lib/errors';
 import { logger } from '~/lib/logger';
 import {
   createCategorySchema,
+  parseRequestBody,
   validateRequestBody,
 } from '~/lib/validations/api';
 
@@ -51,8 +52,7 @@ export async function POST(request: Request) {
   const startTime = Date.now();
   try {
     const session = await requireSession();
-    const body = await request.json();
-
+    const body = await parseRequestBody(request);
     const { name: trimmedName, skipValidation } = validateRequestBody(
       createCategorySchema,
       body

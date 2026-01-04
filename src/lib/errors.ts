@@ -14,6 +14,7 @@ export const APP_ERROR_CODES_BY_KEY = {
   UNPROCESSABLE_CONTENT: 422,
   TOO_MANY_REQUESTS: 429,
   CLIENT_CLOSED_REQUEST: 499,
+  QUOTA_EXCEEDED: 429,
 } as const;
 
 export type APP_ERROR_CODE_KEY = keyof typeof APP_ERROR_CODES_BY_KEY;
@@ -36,6 +37,7 @@ export const ERROR_MESSAGES: Record<APP_ERROR_CODE_KEY, string> = {
   UNPROCESSABLE_CONTENT: 'The request content could not be processed.',
   TOO_MANY_REQUESTS: 'Too many requests. Please wait before trying again.',
   CLIENT_CLOSED_REQUEST: 'The request was closed before completion.',
+  QUOTA_EXCEEDED: 'Quota exceeded. Please wait for reset or upgrade your plan.',
 } as const;
 
 export class AppError extends Error {

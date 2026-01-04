@@ -45,31 +45,3 @@ export type SerializedVideo = Serialize<Video>;
 export function serializeVideo<T extends Video>(video: T): Serialize<T> {
   return serialize(video);
 }
-
-/**
- * Format a date string for display
- * @param dateString ISO 8601 date string
- * @returns Formatted date string like "Dec 12, 2024" or relative time like "2 days ago"
- */
-export function formatPublishedDate(
-  dateString: string | null | undefined
-): string {
-  if (!dateString) return '';
-
-  const date = new Date(dateString);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-
-  if (diffDays === 0) return 'Today';
-  if (diffDays === 1) return 'Yesterday';
-  if (diffDays < 7) return `${diffDays} days ago`;
-  if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
-  if (diffDays < 365) return `${Math.floor(diffDays / 30)} months ago`;
-
-  return date.toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  });
-}

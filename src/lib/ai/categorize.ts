@@ -4,7 +4,9 @@ import { and, eq, inArray, isNull, lt, or } from 'drizzle-orm';
 import * as z from 'zod/v4';
 import { db } from '~/db';
 import { categories, DatabaseVideo, videos } from '~/db/schemas';
+import { VIDEO_SYNC_STATUS } from '~/lib/constants';
 import { logger } from '~/lib/logger';
+import { checkAndIncrementQuotaWithinTx } from '~/lib/quota';
 
 interface VideoForCategorization {
   id: string;
@@ -232,6 +234,44 @@ export interface CategorizeResult {
 }
 
 /**
+ * Build the where condition for videos that need categorization
+ * This is extracted to avoid duplicating the logic between count and select queries
+ */
+function buildVideosToAnalyzeCondition(
+  userId: string,
+  force: boolean,
+  latestCategoryUpdate: Date | null
+) {
+  const baseCondition = and(
+    eq(videos.userId, userId),
+    eq(videos.syncStatus, VIDEO_SYNC_STATUS.ACTIVE)
+  );
+
+  if (force) {
+    return baseCondition;
+  }
+
+  // If no category has been updated (all updatedAt are null),
+  // only check for uncategorized or never-analyzed videos
+  if (latestCategoryUpdate === null) {
+    return and(
+      baseCondition,
+      or(isNull(videos.categoryId), isNull(videos.lastAnalyzedAt))
+    );
+  }
+
+  // Otherwise, also check if videos were analyzed before the latest category update
+  return and(
+    baseCondition,
+    or(
+      isNull(videos.categoryId),
+      isNull(videos.lastAnalyzedAt),
+      lt(videos.lastAnalyzedAt, latestCategoryUpdate)
+    )
+  );
+}
+
+/**
  * Categorize all uncategorized videos for a user
  * This is a reusable function that can be called from API routes or background jobs
  */
@@ -249,42 +289,38 @@ export async function categorizeUserVideos(
     return { categorized: 0, total: 0, skipped: 0 };
   }
 
-  const latestCategoryUpdate = userCategories.reduce((latest, category) => {
-    const updatedAt = category.updatedAt;
-    if (!updatedAt) return latest;
-    return updatedAt > latest ? updatedAt : latest;
-  }, new Date(0));
+  // Find the latest category update timestamp
+  // If no category has an updatedAt, this will be null
+  const latestCategoryUpdate = userCategories.reduce<Date | null>(
+    (latest, category) => {
+      const updatedAt = category.updatedAt;
+      if (!updatedAt) return latest;
+      if (latest === null) return updatedAt;
+      return updatedAt > latest ? updatedAt : latest;
+    },
+    null
+  );
 
-  let videosToAnalyze: DatabaseVideo[] = [];
+  const whereCondition = buildVideosToAnalyzeCondition(
+    userId,
+    force,
+    latestCategoryUpdate
+  );
+
+  const videosToAnalyze = await db
+    .select()
+    .from(videos)
+    .where(whereCondition);
+
+  if (videosToAnalyze.length === 0) {
+    return { categorized: 0, total: 0, skipped: 0 };
+  }
 
   if (force) {
-    videosToAnalyze = await db
-      .select()
-      .from(videos)
-      .where(eq(videos.userId, userId));
-
     logger.info('Force re-categorization requested', {
       userId,
       totalVideos: videosToAnalyze.length,
     });
-  } else {
-    videosToAnalyze = await db
-      .select()
-      .from(videos)
-      .where(
-        and(
-          eq(videos.userId, userId),
-          or(
-            isNull(videos.categoryId),
-            isNull(videos.lastAnalyzedAt),
-            lt(videos.lastAnalyzedAt, latestCategoryUpdate)
-          )
-        )
-      );
-  }
-
-  if (videosToAnalyze.length === 0) {
-    return { categorized: 0, total: 0, skipped: 0 };
   }
 
   const categorizations = await categorizeVideosInBatches(
@@ -302,20 +338,52 @@ export async function categorizeUserVideos(
   );
 
   const validCategoryIds = new Set(userCategories.map((c) => c.id));
+  const videoIdsSet = new Set(videosToAnalyze.map((v) => v.id));
+
   const invalidCategorizations = categorizations.filter(
     (c) => !validCategoryIds.has(c.categoryId)
+  );
+
+  const missingVideoIds = categorizations.filter(
+    (c) => !videoIdsSet.has(c.videoId)
+  );
+
+  const categorizedVideoIds = new Set(
+    categorizations.map((c) => c.videoId)
+  );
+  const uncategorizedVideoIds = videosToAnalyze.filter(
+    (v) => !categorizedVideoIds.has(v.id)
   );
 
   if (invalidCategorizations.length > 0) {
     logger.warn('AI returned invalid category IDs', {
       userId,
       invalidCount: invalidCategorizations.length,
+      invalidCategoryIds: invalidCategorizations.map((c) => c.categoryId),
+    });
+  }
+
+  if (missingVideoIds.length > 0) {
+    logger.warn('AI returned categorizations for unknown video IDs', {
+      userId,
+      missingCount: missingVideoIds.length,
+    });
+  }
+
+  if (uncategorizedVideoIds.length > 0) {
+    logger.warn('Some videos were not categorized by AI', {
+      userId,
+      uncategorizedCount: uncategorizedVideoIds.length,
+      uncategorizedVideoIds: uncategorizedVideoIds.map((v) => v.id),
     });
   }
 
   const categorizationMap = new Map(
     categorizations
-      .filter((c) => validCategoryIds.has(c.categoryId))
+      .filter(
+        (c) =>
+          validCategoryIds.has(c.categoryId) && videoIdsSet.has(c.videoId)
+      )
       .map((c) => [c.videoId, c.categoryId])
   );
 
@@ -324,7 +392,7 @@ export async function categorizeUserVideos(
 
   await db.transaction(async (tx) => {
     const updatesByCategory = new Map<string, string[]>();
-    const uncategorizedVideoIds: string[] = [];
+    const videosWithoutCategory: string[] = [];
 
     for (const video of videosToAnalyze) {
       const categoryId = categorizationMap.get(video.id);
@@ -334,7 +402,7 @@ export async function categorizeUserVideos(
         }
         updatesByCategory.get(categoryId)!.push(video.id);
       } else {
-        uncategorizedVideoIds.push(video.id);
+        videosWithoutCategory.push(video.id);
       }
     }
 
@@ -351,13 +419,12 @@ export async function categorizeUserVideos(
             .where(inArray(videos.id, chunk))
         );
       }
-      categorizedCount += videoIds.length;
     }
 
-    if (uncategorizedVideoIds.length > 0) {
+    if (videosWithoutCategory.length > 0) {
       const chunkSize = 1000;
-      for (let i = 0; i < uncategorizedVideoIds.length; i += chunkSize) {
-        const chunk = uncategorizedVideoIds.slice(i, i + chunkSize);
+      for (let i = 0; i < videosWithoutCategory.length; i += chunkSize) {
+        const chunk = videosWithoutCategory.slice(i, i + chunkSize);
         updatePromises.push(
           tx
             .update(videos)
@@ -368,6 +435,22 @@ export async function categorizeUserVideos(
     }
 
     await Promise.all(updatePromises);
+
+    const categorizedCountInTx = Array.from(updatesByCategory.values()).reduce(
+      (sum, videoIds) => sum + videoIds.length,
+      0
+    );
+
+    if (categorizedCountInTx > 0) {
+      await checkAndIncrementQuotaWithinTx(
+        tx,
+        userId,
+        'categorize',
+        categorizedCountInTx
+      );
+    }
+
+    categorizedCount = categorizedCountInTx;
   });
 
   logger.info('Categorized user videos', {

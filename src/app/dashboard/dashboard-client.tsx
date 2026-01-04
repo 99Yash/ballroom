@@ -15,6 +15,7 @@ import { parseAsInteger, parseAsString, useQueryState } from 'nuqs';
 import * as React from 'react';
 import { toast } from 'sonner';
 import { CategoryManager } from '~/components/category-manager';
+import { QuotaDisplay } from '~/components/quota-display';
 import { SyncButton } from '~/components/sync-button';
 import { Button } from '~/components/ui/button';
 import { Input } from '~/components/ui/input';
@@ -280,7 +281,10 @@ export function DashboardClient({
               <Youtube className="h-5 w-5 text-white" />
             </motion.div>
             <div className="min-w-0 flex-1">
-              <h1 className="truncate text-lg font-semibold tracking-tight">
+              <h1
+                className="truncate text-lg font-semibold tracking-tight"
+                title={siteConfig.name}
+              >
                 {siteConfig.name}
               </h1>
               <p className="truncate text-xs text-muted-foreground/80">
@@ -293,7 +297,9 @@ export function DashboardClient({
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.3 }}
+            className="flex items-center gap-3"
           >
+            <QuotaDisplay />
             <Button
               variant="ghost"
               onClick={handleSignOut}
@@ -393,7 +399,10 @@ export function DashboardClient({
                   disabled={isLoading}
                   className="h-9 whitespace-nowrap rounded-lg border-border/50 px-4 text-sm font-medium shadow-sm transition-all duration-200 hover:shadow-md disabled:opacity-50 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md"
                 >
-                  <span className="truncate max-w-[120px] sm:max-w-none">
+                  <span
+                    className="truncate max-w-[120px] sm:max-w-none"
+                    title={category.name}
+                  >
                     {category.name}
                   </span>
                   <span className="ml-1.5 font-normal opacity-80">

@@ -12,6 +12,7 @@ export interface ArrowRightIconHandle {
 
 interface ArrowRightIconProps extends React.HTMLAttributes<HTMLDivElement> {
   size?: number;
+  animate?: boolean;
 }
 
 const PATH_VARIANTS: Variants = {
@@ -20,6 +21,8 @@ const PATH_VARIANTS: Variants = {
     d: ['M5 12h14', 'M5 12h9', 'M5 12h14'],
     transition: {
       duration: 0.4,
+      repeat: Infinity,
+      repeatType: 'loop',
     },
   },
 };
@@ -31,6 +34,8 @@ const SECONDARY_PATH_VARIANTS: Variants = {
     translateX: [0, -3, 0],
     transition: {
       duration: 0.4,
+      repeat: Infinity,
+      repeatType: 'loop',
     },
   },
 };
@@ -38,7 +43,7 @@ const SECONDARY_PATH_VARIANTS: Variants = {
 const ArrowRightIcon = React.forwardRef<
   ArrowRightIconHandle,
   ArrowRightIconProps
->(({ onMouseEnter, onMouseLeave, className, size = 28, ...props }, ref) => {
+>(({ onMouseEnter, onMouseLeave, className, size = 28, animate = false, ...props }, ref) => {
   const controls = useAnimation();
   const isControlledRef = React.useRef(false);
 
@@ -51,26 +56,34 @@ const ArrowRightIcon = React.forwardRef<
     };
   });
 
+  React.useEffect(() => {
+    if (animate && !isControlledRef.current) {
+      controls.start('animate');
+    } else if (!animate && !isControlledRef.current) {
+      controls.start('normal');
+    }
+  }, [animate, controls]);
+
   const handleMouseEnter = React.useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
-      if (!isControlledRef.current) {
-        controls.start('animate');
-      } else {
+      if (isControlledRef.current || animate) {
         onMouseEnter?.(e);
+      } else {
+        controls.start('animate');
       }
     },
-    [controls, onMouseEnter]
+    [controls, onMouseEnter, animate]
   );
 
   const handleMouseLeave = React.useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
-      if (!isControlledRef.current) {
-        controls.start('normal');
-      } else {
+      if (isControlledRef.current || animate) {
         onMouseLeave?.(e);
+      } else {
+        controls.start('normal');
       }
     },
-    [controls, onMouseLeave]
+    [controls, onMouseLeave, animate]
   );
 
   return (

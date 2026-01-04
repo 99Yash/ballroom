@@ -133,6 +133,9 @@
   body {
     @apply bg-background text-foreground overflow-hidden;
   }
+  button {
+    @apply cursor-pointer;
+  }
 
   /* Scrollbar styling */
   ::-webkit-scrollbar {

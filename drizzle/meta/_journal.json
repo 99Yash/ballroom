@@ -43,6 +43,13 @@
       "when": 1767317774991,
       "tag": "0005_lazy_meggan",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1767495234527,
+      "tag": "0006_rapid_shaman",
+      "breakpoints": true
     }
   ]
 }

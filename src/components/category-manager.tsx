@@ -147,12 +147,17 @@ export function CategoryManager({
               categories.map((category) => (
                 <div
                   key={category.id}
-                  className="flex items-center justify-between rounded-lg border bg-card p-3"
+                  className="flex items-center justify-between rounded-lg border bg-card p-3 gap-2"
                 >
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium">{category.name}</span>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span
+                      className="text-sm font-medium truncate"
+                      title={category.name}
+                    >
+                      {category.name}
+                    </span>
                     {category.isDefault && (
-                      <Badge variant="secondary" className="text-xs">
+                      <Badge variant="secondary" className="text-xs shrink-0">
                         Default
                       </Badge>
                     )}

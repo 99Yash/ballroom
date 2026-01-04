@@ -6,6 +6,7 @@ import { requireSession } from '~/lib/auth/session';
 import { AppError, createErrorResponse } from '~/lib/errors';
 import { logger } from '~/lib/logger';
 import {
+  parseRequestBody,
   updateCategorySchema,
   validateRequestBody,
 } from '~/lib/validations/api';
@@ -67,8 +68,7 @@ export async function PATCH(
 
   try {
     const session = await requireSession();
-    const body = await request.json();
-
+    const body = await parseRequestBody(request);
     const { name: trimmedName } = validateRequestBody(
       updateCategorySchema,
       body
