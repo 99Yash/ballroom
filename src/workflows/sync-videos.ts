@@ -101,11 +101,6 @@ function handleSyncError(
   // Fallback: convert non-Error values to an Error instance
   // Runtime safeguard for unexpected error types, while keeping all code paths throwing
   throw new Error(String(error));
-
-  // Explicit assertion to guarantee the 'never' return type contract
-  // This will cause a compile-time error if code somehow reaches here
-  const _exhaustiveCheck: never = error;
-  throw _exhaustiveCheck;
 }
 
 /**
