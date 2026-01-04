@@ -226,9 +226,8 @@ export async function checkAndIncrementQuotaWithinTx(
   }
   if (amount === 0) return;
 
-  // First, check and reset quota if needed (within transaction)
+  // Check and reset quota if needed (within transaction)
   // Use PostgreSQL's NOW() AT TIME ZONE 'UTC' for consistent UTC comparison
-  // This ensures both sides of the comparison are in UTC, avoiding timezone issues
   const nextResetDate = getNextQuotaResetDate();
 
   await tx
@@ -248,10 +247,6 @@ export async function checkAndIncrementQuotaWithinTx(
       )
     );
 
-  // Note: This reset-then-read pattern runs within a single transaction. Even if a
-  // concurrent transaction also resets quota around this time, the later conditional
-  // increment (with a guarded WHERE clause) ensures we never exceed the user's quota.
-  // At worst, a concurrent reset causes us to use a more conservative view of usage.
   // Read current quota values (within transaction for consistency)
   const [userData] = await tx
     .select({
@@ -271,7 +266,6 @@ export async function checkAndIncrementQuotaWithinTx(
     });
   }
 
-  // Check quota
   const { used: currentUsed, limit } = getQuotaValues(userData, quotaType);
 
   if (currentUsed + amount > limit) {
@@ -284,7 +278,6 @@ export async function checkAndIncrementQuotaWithinTx(
   }
 
   // Increment quota atomically with conditional WHERE clause
-  // This ensures the update only happens if quota hasn't changed
   const result = await tx
     .update(user)
     .set(buildQuotaIncrementUpdate(quotaType, amount))
@@ -294,8 +287,7 @@ export async function checkAndIncrementQuotaWithinTx(
 
   const rowsAffected = result.rowCount ?? 0;
   if (rowsAffected === 0) {
-    // Could be user not found OR quota exceeded (race condition detected)
-    // Re-check to provide accurate error message
+    // Re-check to provide accurate error message (could be user not found or quota exceeded)
     const [recheckData] = await tx
       .select({
         syncQuotaUsed: user.syncQuotaUsed,
@@ -328,8 +320,7 @@ export async function checkAndIncrementQuotaWithinTx(
       });
     }
 
-    // If we get here, it's likely a race condition: the conditional update failed
-    // even though the recheck shows sufficient quota remains. Retry once.
+    // Retry once - conditional update may have failed due to race condition
     const retryResult = await tx
       .update(user)
       .set(buildQuotaIncrementUpdate(quotaType, amount))

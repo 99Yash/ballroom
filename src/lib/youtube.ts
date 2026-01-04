@@ -4,11 +4,7 @@ import { OAuth2Client } from 'google-auth-library';
 import { db } from '~/db';
 import { account } from '~/db/schemas';
 import { env } from '~/lib/env';
-import {
-  AUTH_ERROR_TYPES,
-  AppError,
-  AuthenticationError,
-} from '~/lib/errors';
+import { AUTH_ERROR_TYPES, AppError, AuthenticationError } from '~/lib/errors';
 import { logger } from '~/lib/logger';
 
 export interface YouTubeVideo {
@@ -21,9 +17,6 @@ export interface YouTubeVideo {
   publishedAt: Date;
 }
 
-/**
- * Create an authenticated YouTube client for a user
- */
 async function createYouTubeClient(userId: string) {
   const userAccount = await db
     .select()
@@ -115,21 +108,22 @@ async function createYouTubeClient(userId: string) {
       }
     }
 
-    logger.error('Failed to persist refreshed token after all retries', lastError, {
-      userId,
-      accountId: acc.id,
-      maxRetries,
-      recommendation:
-        'User may need to re-authenticate if token expires. Consider setting up monitoring for persistent failures.',
-    });
+    logger.error(
+      'Failed to persist refreshed token after all retries',
+      lastError,
+      {
+        userId,
+        accountId: acc.id,
+        maxRetries,
+        recommendation:
+          'User may need to re-authenticate if token expires. Consider setting up monitoring for persistent failures.',
+      }
+    );
   });
 
   return youtube({ version: 'v3', auth: oauth2Client });
 }
 
-/**
- * Transform YouTube API video item to our YouTubeVideo type
- */
 function transformVideoItem(item: youtube_v3.Schema$Video) {
   const snippet = item.snippet;
   if (!snippet || !item.id) {
@@ -154,8 +148,7 @@ function transformVideoItem(item: youtube_v3.Schema$Video) {
 }
 
 /**
- * Fetch liked videos from YouTube
- * Uses the videos.list API with myRating='like' parameter (modern approach)
+ * Fetch liked videos from YouTube using the videos.list API with myRating='like'
  *
  * @throws {AuthenticationError} If authentication fails or tokens are invalid
  * @throws {AppError} If API call fails due to rate limits, network errors, or invalid responses

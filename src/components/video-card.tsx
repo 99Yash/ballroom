@@ -91,14 +91,16 @@ export function VideoCard({ video, className, priority }: VideoCardProps) {
         </h3>
 
         <div className="mt-auto flex items-center justify-between gap-2 border-t border-border/50 pt-3 text-xs text-muted-foreground">
-          <div className="flex items-center gap-1.5 truncate font-medium">
-            <span
-              className="truncate hover:text-foreground"
-              title={video.channelName ?? undefined}
-            >
-              {video.channelName}
-            </span>
-          </div>
+          {video.channelName && (
+            <div className="flex items-center gap-1.5 truncate font-medium">
+              <span
+                className="truncate hover:text-foreground"
+                title={video.channelName}
+              >
+                {video.channelName}
+              </span>
+            </div>
+          )}
 
           {publishedDate && (
             <div className="flex shrink-0 items-center gap-1 opacity-70">

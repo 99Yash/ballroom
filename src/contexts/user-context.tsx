@@ -32,6 +32,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   const fetchQuota = React.useCallback(async () => {
     try {
       setQuotaError(null);
+      setQuotaLoading(true);
       const response = await fetch('/api/quota');
       if (!response.ok) {
         throw new Error('Failed to fetch quota');

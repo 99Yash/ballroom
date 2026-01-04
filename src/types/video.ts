@@ -57,9 +57,22 @@ export function formatPublishedDate(
   if (!dateString) return '';
 
   const date = new Date(dateString);
+
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
   const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+  if (diffDays < 0) {
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+  }
 
   if (diffDays === 0) return 'Today';
   if (diffDays === 1) return 'Yesterday';

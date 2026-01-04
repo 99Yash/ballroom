@@ -92,14 +92,10 @@ function handleSyncError(
     error: error instanceof Error ? error.message : String(error),
   });
 
-  // Re-throw the error to trigger Trigger.dev's retry mechanism
-  // All code paths must throw to satisfy the 'never' return type
   if (error instanceof Error) {
     throw error;
   }
 
-  // Fallback: convert non-Error values to an Error instance
-  // Runtime safeguard for unexpected error types, while keeping all code paths throwing
   throw new Error(String(error));
 }
 

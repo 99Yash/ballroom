@@ -273,8 +273,7 @@ export async function progressiveSync(
         );
       }
 
-      // Intentionally do not rethrow: videos are already saved and quota consumed,
-      // and a stale lastSeenAt will be corrected in future syncs.
+      // Videos are already saved and quota consumed; stale lastSeenAt will be corrected in future syncs
     }
 
     totalFetched += fetchedVideos.length;
@@ -327,21 +326,13 @@ export async function progressiveSync(
 
 /**
  * Inserts new videos and optionally increments quota within a single transaction.
- *
- * **Transaction Atomicity**: Video insertion and quota increment happen atomically.
- * If either operation fails, the entire transaction rolls back. This ensures quota
- * is only consumed when videos are successfully inserted.
- *
- * **Post-Transaction Behavior**: Once the transaction commits, videos are in the
- * database and quota is consumed. If subsequent operations in the sync process fail
- * (e.g., `updateLastSeenAt`), the quota remains consumed. This is intentional -
- * quota tracks successful video insertions, not overall sync completion.
+ * Video insertion and quota increment happen atomically - if either fails, the transaction rolls back.
+ * Once committed, quota remains consumed even if subsequent sync operations fail.
  *
  * @param userId - The user ID to insert videos for
  * @param newVideos - Array of YouTube videos to insert
  * @param shouldCheckQuota - If true, checks quota limits and increments quota.
- *   If false, quota limits are not checked but quota is still incremented for
- *   tracking purposes (for admin/internal operations that should not be limited).
+ *   If false, quota limits are not checked but quota is still incremented for tracking.
  */
 async function insertNewVideosAndIncrementQuota(
   userId: string,
@@ -353,10 +344,6 @@ async function insertNewVideosAndIncrementQuota(
   const now = new Date();
 
   await db.transaction(async (tx) => {
-    // Use ON CONFLICT DO NOTHING to handle race conditions gracefully
-    // If a video already exists (due to concurrent sync), it will be silently skipped
-    // This prevents unique constraint violations
-    // The rowCount tells us how many videos were actually inserted (not skipped)
     const insertResult = await tx
       .insert(videos)
       .values(
@@ -377,8 +364,6 @@ async function insertNewVideosAndIncrementQuota(
         target: [videos.userId, videos.youtubeId],
       });
 
-    // rowCount tells us how many videos were actually inserted (duplicates are skipped)
-    // This ensures quota is only incremented for videos that were actually inserted
     const actuallyInserted = insertResult.rowCount ?? 0;
 
     if (actuallyInserted > 0) {
@@ -402,14 +387,15 @@ async function updateLastSeenAt(
 ): Promise<void> {
   if (youtubeIds.length === 0) return;
 
+  const now = new Date();
   const threshold = new Date(
-    Date.now() - APP_CONFIG.sync.lastSeenAtUpdateThresholdMs
+    now.getTime() - APP_CONFIG.sync.lastSeenAtUpdateThresholdMs
   );
 
   await db
     .update(videos)
     .set({
-      lastSeenAt: new Date(),
+      lastSeenAt: now,
       syncStatus: VIDEO_SYNC_STATUS.ACTIVE,
     })
     .where(
