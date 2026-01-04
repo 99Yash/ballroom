@@ -29,7 +29,7 @@ const PATH_VARIANTS: Variants = {
     transition: {
       duration: 0.6,
       opacity: { duration: 0.1 },
-      repeat: Infinity,
+      repeat: 2,
       repeatType: 'loop',
     },
   },
