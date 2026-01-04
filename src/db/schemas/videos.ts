@@ -108,6 +108,7 @@ export const videos = pgTable(
     index('idx_videos_user_id_category_id').on(table.userId, table.categoryId),
     index('idx_videos_sync_status').on(table.syncStatus),
     index('idx_videos_user_sync_status').on(table.userId, table.syncStatus),
+    index('idx_videos_last_seen_at').on(table.lastSeenAt),
     index('idx_videos_search_vector').using(
       'gin',
       createVideoSearchVector(table.title, table.description, table.channelName)

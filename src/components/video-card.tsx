@@ -40,7 +40,6 @@ export function VideoCard({ video, className, priority }: VideoCardProps) {
         className
       )}
     >
-      {/* Thumbnail Container */}
       <div className="relative aspect-video w-full overflow-hidden bg-muted/30">
         {video.thumbnailUrl ? (
           <>
@@ -52,7 +51,6 @@ export function VideoCard({ video, className, priority }: VideoCardProps) {
               className="object-cover transition-transform duration-500 group-hover:scale-110"
               sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
             />
-            {/* Dark overlay on hover */}
             <div className="absolute inset-0 bg-black/20 opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
           </>
         ) : (
@@ -61,14 +59,12 @@ export function VideoCard({ video, className, priority }: VideoCardProps) {
           </div>
         )}
 
-        {/* Play Button Overlay - Pops in center */}
         <div className="absolute inset-0 flex items-center justify-center opacity-0 transition-opacity duration-300 group-hover:opacity-100">
           <div className="flex h-14 w-14 items-center justify-center rounded-full bg-white/90 text-primary shadow-lg backdrop-blur-sm transition-transform duration-300 group-hover:scale-105 dark:bg-black/80">
             <PlayIcon size={24} className="ml-1" animate />
           </div>
         </div>
 
-        {/* Floating Category Badge (Sticker style) */}
         {video.categoryName && (
           <div className="absolute right-3 top-3 z-10">
             <Badge
@@ -81,7 +77,6 @@ export function VideoCard({ video, className, priority }: VideoCardProps) {
         )}
       </div>
 
-      {/* Content */}
       <div className="flex flex-1 flex-col gap-3 p-5">
         <h3
           className="line-clamp-2 font-bold leading-tight tracking-tight text-foreground/90 group-hover:text-primary"

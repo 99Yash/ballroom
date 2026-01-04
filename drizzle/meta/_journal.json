@@ -50,6 +50,13 @@
       "when": 1767495234527,
       "tag": "0006_rapid_shaman",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1767531291132,
+      "tag": "0007_faulty_magus",
+      "breakpoints": true
     }
   ]
 }
