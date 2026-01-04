@@ -17,7 +17,7 @@ interface VideoCardProps {
 
 export function VideoCard({ video, className, priority }: VideoCardProps) {
   const youtubeUrl = `https://www.youtube.com/watch?v=${video.youtubeId}`;
-  const publishedDate = formatPublishedDate(video.publishedAt);
+  const publishedDate = video.publishedAt ? formatPublishedDate(video.publishedAt) : null;
 
   return (
     <motion.a
