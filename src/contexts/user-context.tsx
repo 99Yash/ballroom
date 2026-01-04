@@ -22,7 +22,9 @@ interface UserContextValue {
   refetchQuota: () => Promise<void>;
 }
 
-const UserContext = React.createContext<UserContextValue | undefined>(undefined);
+const UserContext = React.createContext<UserContextValue | undefined>(
+  undefined
+);
 
 export function UserProvider({ children }: { children: React.ReactNode }) {
   const [quota, setQuota] = React.useState<QuotaState | null>(null);
@@ -72,4 +74,3 @@ export function useUserContext(): UserContextValue {
   }
   return context;
 }
-

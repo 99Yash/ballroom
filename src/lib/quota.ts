@@ -49,6 +49,11 @@ function createQuotaStatus(
       rounded = 99.9;
     }
 
+    // Cap at 100% for display purposes when exceeded (e.g., if quota was adjusted)
+    if (rounded > 100) {
+      rounded = 100;
+    }
+
     percentageUsed = rounded;
   }
   return {
