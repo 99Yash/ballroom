@@ -1,6 +1,6 @@
 'use client';
 
-import type { ClientQuotaInfo, ClientQuotaState } from '~/lib/quota';
+import type { ClientQuotaInfo, ClientQuotaState } from '~/lib/quota-client';
 import { useUserContext } from '~/contexts/user-context';
 import { APP_CONFIG } from '~/lib/constants';
 

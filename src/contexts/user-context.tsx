@@ -5,7 +5,7 @@ import {
   clientQuotaStateSchema,
   type ClientQuotaInfo,
   type ClientQuotaState,
-} from '~/lib/quota';
+} from '~/lib/quota-client';
 
 // Re-export for convenience
 export type { ClientQuotaInfo, ClientQuotaState };

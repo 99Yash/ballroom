@@ -1,9 +1,11 @@
+import 'server-only';
+
 import { lastDayOfMonth } from 'date-fns';
 import { and, eq, isNull, or, sql } from 'drizzle-orm';
-import * as z from 'zod/v4';
 import { db } from '~/db';
 import { user } from '~/db/schemas';
 import type { TransactionContext } from '~/db/types';
+import type { ClientQuotaState } from '~/lib/quota-client';
 import { APP_CONFIG } from './constants';
 import { AppError } from './errors';
 import { logger } from './logger';
@@ -25,25 +27,6 @@ export interface UserQuotas {
   sync: QuotaStatus;
   categorize: QuotaStatus;
 }
-
-export const clientQuotaInfoSchema = z.object({
-  used: z.number().nonnegative(),
-  limit: z.number().nonnegative(),
-  remaining: z.number().nonnegative(),
-  percentageUsed: z.number().min(0).max(100),
-  resetAt: z.string().nullable(),
-});
-
-export const clientQuotaStateSchema = z.object({
-  sync: clientQuotaInfoSchema,
-  categorize: clientQuotaInfoSchema,
-});
-
-/** Client-side quota info (resetAt serialized to ISO string) */
-export type ClientQuotaInfo = z.infer<typeof clientQuotaInfoSchema>;
-
-/** Client-side container for all user quotas */
-export type ClientQuotaState = z.infer<typeof clientQuotaStateSchema>;
 
 function createQuotaStatus(
   used: number,
