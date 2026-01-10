@@ -5,8 +5,9 @@ import * as z from 'zod/v4';
 import { db } from '~/db';
 import { categories, videos } from '~/db/schemas';
 import { VIDEO_SYNC_STATUS } from '~/lib/constants';
+import { AppError } from '~/lib/errors';
 import { logger } from '~/lib/logger';
-import { checkAndIncrementQuotaWithinTx } from '~/lib/quota';
+import { checkAndIncrementQuotaWithinTx, getUserQuotas } from '~/lib/quota';
 
 interface VideoForCategorization {
   id: string;
@@ -306,6 +307,23 @@ export async function categorizeUserVideos(
 
   if (videosToAnalyze.length === 0) {
     return { categorized: 0, total: 0, skipped: 0 };
+  }
+
+  // Check quota upfront before expensive AI work
+  const quotas = await getUserQuotas(userId);
+  if (quotas.categorize.isExceeded) {
+    const daysUntilReset = quotas.categorize.resetAt
+      ? Math.ceil(
+          (quotas.categorize.resetAt.getTime() - Date.now()) /
+            (1000 * 60 * 60 * 24)
+        )
+      : 0;
+    const safeDaysUntilReset = Math.max(0, daysUntilReset);
+
+    throw new AppError({
+      code: 'QUOTA_EXCEEDED',
+      message: `Categorization quota exceeded. Used: ${quotas.categorize.used}/${quotas.categorize.limit}. Resets in ${safeDaysUntilReset} days.`,
+    });
   }
 
   if (force) {

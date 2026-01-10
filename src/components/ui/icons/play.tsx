@@ -2,20 +2,16 @@
 
 import type { Variants } from 'motion/react';
 import { motion, useAnimation } from 'motion/react';
-import type { HTMLAttributes } from 'react';
-import * as React from 'react';
-import { useAnimatedIcon } from '~/hooks/use-animated-icon';
-import { cn } from '~/lib/utils';
+import {
+  createAnimatedIcon,
+  type AnimatedIconHandle,
+  type AnimatedIconProps,
+} from './create-animated-icon';
 
-export interface PlayIconHandle {
-  startAnimation: () => void;
-  stopAnimation: () => void;
-}
+type AnimationControls = ReturnType<typeof useAnimation>;
 
-interface PlayIconProps extends HTMLAttributes<HTMLDivElement> {
-  size?: number;
-  animate?: boolean;
-}
+export type PlayIconHandle = AnimatedIconHandle;
+export type PlayIconProps = AnimatedIconProps;
 
 const VARIANTS: Variants = {
   normal: {
@@ -37,83 +33,37 @@ const VARIANTS: Variants = {
   },
 };
 
-const PlayIcon = React.forwardRef<PlayIconHandle, PlayIconProps>(
-  (
-    {
-      onMouseEnter,
-      onMouseLeave,
-      className,
-      size = 28,
-      animate = false,
-      ...props
-    },
-    ref
-  ) => {
-    const controls = useAnimation();
-    const isControlledRef = React.useRef(false);
+function PlaySvg({
+  controls,
+  size,
+}: {
+  controls: AnimationControls;
+  size: number;
+}) {
+  return (
+    <svg
+      fill="currentColor"
+      height={size}
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="2"
+      viewBox="0 0 24 24"
+      width={size}
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <motion.polygon
+        animate={controls}
+        initial="normal"
+        points="5 3 19 12 5 21 5 3"
+        variants={VARIANTS}
+      />
+    </svg>
+  );
+}
 
-    React.useImperativeHandle(ref, () => {
-      isControlledRef.current = true;
-      return {
-        startAnimation: () => controls.start('animate'),
-        stopAnimation: () => controls.start('normal'),
-      };
-    });
-
-    useAnimatedIcon(controls, animate, isControlledRef);
-
-    const handleMouseEnter = React.useCallback(
-      (e: React.MouseEvent<HTMLDivElement>) => {
-        if (isControlledRef.current || animate) {
-          onMouseEnter?.(e);
-        } else {
-          controls.start('animate');
-        }
-      },
-      [controls, onMouseEnter, animate]
-    );
-
-    const handleMouseLeave = React.useCallback(
-      (e: React.MouseEvent<HTMLDivElement>) => {
-        if (isControlledRef.current || animate) {
-          onMouseLeave?.(e);
-        } else {
-          controls.start('normal');
-        }
-      },
-      [controls, onMouseLeave, animate]
-    );
-
-    return (
-      <div
-        className={cn(className)}
-        onMouseEnter={handleMouseEnter}
-        onMouseLeave={handleMouseLeave}
-        {...props}
-      >
-        <svg
-          fill="currentColor"
-          height={size}
-          stroke="currentColor"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth="2"
-          viewBox="0 0 24 24"
-          width={size}
-          xmlns="http://www.w3.org/2000/svg"
-        >
-          <motion.polygon
-            animate={controls}
-            initial="normal"
-            points="5 3 19 12 5 21 5 3"
-            variants={VARIANTS}
-          />
-        </svg>
-      </div>
-    );
-  }
-);
-
-PlayIcon.displayName = 'PlayIcon';
+const PlayIcon = createAnimatedIcon(PlaySvg, {
+  displayName: 'PlayIcon',
+});
 
 export { PlayIcon };

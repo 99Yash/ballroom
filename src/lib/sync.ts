@@ -73,14 +73,15 @@ export async function progressiveSync(
         and(eq(videos.userId, userId), inArray(videos.youtubeId, youtubeIds))
       );
 
-    const existingIds = new Set(existingVideos.map((v) => v.youtubeId));
+    const existingYoutubeIds = existingVideos.map((v) => v.youtubeId);
+    const existingIds = new Set(existingYoutubeIds);
     const newVideos = fetchedVideos.filter(
       (v) => !existingIds.has(v.youtubeId)
     );
 
     const insertedCount = await syncBatchToDatabase({
       userId,
-      youtubeIds,
+      existingYoutubeIds,
       newVideos,
       shouldCheckQuota: opts.checkQuota,
       syncStartedAt,
@@ -118,10 +119,10 @@ export async function progressiveSync(
 
   let unlikedCount = 0;
   if (reachedEnd) {
-    unlikedCount =
-      totalFetched === 0
-        ? await markAllVideosUnliked(userId)
-        : await markUnlikedVideosByLastSeenAt(userId, syncStartedAt);
+    unlikedCount = await markVideosAsUnliked(
+      userId,
+      totalFetched === 0 ? undefined : syncStartedAt
+    );
   }
 
   logger.info('Progressive sync completed', {
@@ -144,18 +145,18 @@ export async function progressiveSync(
 
 async function syncBatchToDatabase({
   userId,
-  youtubeIds,
+  existingYoutubeIds,
   newVideos,
   shouldCheckQuota,
   syncStartedAt,
 }: {
   userId: string;
-  youtubeIds: string[];
+  existingYoutubeIds: string[];
   newVideos: YouTubeVideo[];
   shouldCheckQuota: boolean;
   syncStartedAt: Date;
 }): Promise<number> {
-  if (youtubeIds.length === 0) return 0;
+  if (existingYoutubeIds.length === 0 && newVideos.length === 0) return 0;
 
   return db.transaction(async (tx) => {
     const insertResult =
@@ -183,15 +184,21 @@ async function syncBatchToDatabase({
 
     const insertedCount = insertResult?.rowCount ?? 0;
 
-    await tx
-      .update(videos)
-      .set({
-        lastSeenAt: syncStartedAt,
-        syncStatus: VIDEO_SYNC_STATUS.ACTIVE,
-      })
-      .where(
-        and(eq(videos.userId, userId), inArray(videos.youtubeId, youtubeIds))
-      );
+    // Only update existing videos (newly inserted ones already have correct values)
+    if (existingYoutubeIds.length > 0) {
+      await tx
+        .update(videos)
+        .set({
+          lastSeenAt: syncStartedAt,
+          syncStatus: VIDEO_SYNC_STATUS.ACTIVE,
+        })
+        .where(
+          and(
+            eq(videos.userId, userId),
+            inArray(videos.youtubeId, existingYoutubeIds)
+          )
+        );
+    }
 
     if (insertedCount > 0) {
       if (shouldCheckQuota) {
@@ -205,46 +212,35 @@ async function syncBatchToDatabase({
   });
 }
 
-async function markUnlikedVideosByLastSeenAt(
+async function markVideosAsUnliked(
   userId: string,
-  syncStartedAt: Date
+  syncStartedAt?: Date
 ): Promise<number> {
-  const updated = await db
-    .update(videos)
-    .set({ syncStatus: VIDEO_SYNC_STATUS.UNLIKED })
-    .where(
-      and(
-        eq(videos.userId, userId),
-        eq(videos.syncStatus, VIDEO_SYNC_STATUS.ACTIVE),
+  const baseCondition = and(
+    eq(videos.userId, userId),
+    eq(videos.syncStatus, VIDEO_SYNC_STATUS.ACTIVE)
+  );
+
+  const condition = syncStartedAt
+    ? and(
+        baseCondition,
         or(isNull(videos.lastSeenAt), lt(videos.lastSeenAt, syncStartedAt))
       )
-    )
-    .returning({ id: videos.id });
+    : baseCondition;
 
-  if (updated.length > 0) {
-    logger.info('Marked videos as unliked', { userId, count: updated.length });
-  }
-
-  return updated.length;
-}
-
-async function markAllVideosUnliked(userId: string): Promise<number> {
   const updated = await db
     .update(videos)
     .set({ syncStatus: VIDEO_SYNC_STATUS.UNLIKED })
-    .where(
-      and(
-        eq(videos.userId, userId),
-        eq(videos.syncStatus, VIDEO_SYNC_STATUS.ACTIVE)
-      )
-    )
+    .where(condition)
     .returning({ id: videos.id });
 
   if (updated.length > 0) {
-    logger.info('Marked all videos as unliked (no liked videos found)', {
-      userId,
-      count: updated.length,
-    });
+    logger.info(
+      syncStartedAt
+        ? 'Marked videos as unliked'
+        : 'Marked all videos as unliked (no liked videos found)',
+      { userId, count: updated.length }
+    );
   }
 
   return updated.length;

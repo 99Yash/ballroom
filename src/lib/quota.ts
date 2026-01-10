@@ -1,5 +1,6 @@
 import { lastDayOfMonth } from 'date-fns';
 import { and, eq, isNull, or, sql } from 'drizzle-orm';
+import * as z from 'zod/v4';
 import { db } from '~/db';
 import { user } from '~/db/schemas';
 import type { TransactionContext } from '~/db/types';
@@ -9,6 +10,7 @@ import { logger } from './logger';
 
 export type QuotaType = 'sync' | 'categorize';
 
+/** Server-side quota status with Date objects */
 export interface QuotaStatus {
   used: number;
   limit: number;
@@ -18,10 +20,30 @@ export interface QuotaStatus {
   percentageUsed: number;
 }
 
+/** Server-side container for all user quotas */
 export interface UserQuotas {
   sync: QuotaStatus;
   categorize: QuotaStatus;
 }
+
+export const clientQuotaInfoSchema = z.object({
+  used: z.number().nonnegative(),
+  limit: z.number().nonnegative(),
+  remaining: z.number().nonnegative(),
+  percentageUsed: z.number().min(0).max(100),
+  resetAt: z.string().nullable(),
+});
+
+export const clientQuotaStateSchema = z.object({
+  sync: clientQuotaInfoSchema,
+  categorize: clientQuotaInfoSchema,
+});
+
+/** Client-side quota info (resetAt serialized to ISO string) */
+export type ClientQuotaInfo = z.infer<typeof clientQuotaInfoSchema>;
+
+/** Client-side container for all user quotas */
+export type ClientQuotaState = z.infer<typeof clientQuotaStateSchema>;
 
 function createQuotaStatus(
   used: number,
@@ -155,7 +177,14 @@ export async function checkAndIncrementQuotaWithinTx(
     )
     .returning({ id: user.id });
 
-  if (update.length === 1) return;
+  if (update.length === 1) {
+    logger.debug('Quota checked and incremented in transaction', {
+      userId,
+      quotaType,
+      amount,
+    });
+    return;
+  }
 
   const [current] = await tx
     .select({
@@ -176,6 +205,15 @@ export async function checkAndIncrementQuotaWithinTx(
   }
 
   const { used, limit } = getQuotaValues(current, quotaType);
+
+  logger.debug('Quota check failed - limit exceeded', {
+    userId,
+    quotaType,
+    requestedAmount: amount,
+    currentUsed: used,
+    limit,
+  });
+
   throw new AppError({
     code: 'QUOTA_EXCEEDED',
     message: `${getQuotaTypeDisplayName(
@@ -232,10 +270,7 @@ function buildQuotaResetNeededCondition(userId: string) {
   );
 }
 
-function buildQuotaIncrementUpdate(
-  quotaType: QuotaType,
-  amount: number
-): Record<string, ReturnType<typeof sql>> {
+function buildQuotaIncrementUpdate(quotaType: QuotaType, amount: number) {
   return quotaType === 'sync'
     ? { syncQuotaUsed: sql`${user.syncQuotaUsed} + ${amount}` }
     : { categorizeQuotaUsed: sql`${user.categorizeQuotaUsed} + ${amount}` };
@@ -275,7 +310,7 @@ export async function incrementQuotaWithinTx(
   });
 }
 
-export function formatQuotaForClient(quotas: UserQuotas) {
+export function formatQuotaForClient(quotas: UserQuotas): ClientQuotaState {
   return {
     sync: {
       used: quotas.sync.used,

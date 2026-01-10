@@ -1,22 +1,17 @@
 'use client';
 
 import * as React from 'react';
+import {
+  clientQuotaStateSchema,
+  type ClientQuotaInfo,
+  type ClientQuotaState,
+} from '~/lib/quota';
 
-export interface QuotaInfo {
-  used: number;
-  limit: number;
-  remaining: number;
-  percentageUsed: number;
-  resetAt: string | null;
-}
-
-export interface QuotaState {
-  sync: QuotaInfo;
-  categorize: QuotaInfo;
-}
+// Re-export for convenience
+export type { ClientQuotaInfo, ClientQuotaState };
 
 interface UserContextValue {
-  quota: QuotaState | null;
+  quota: ClientQuotaState | null;
   quotaLoading: boolean;
   quotaError: Error | null;
   refetchQuota: () => Promise<void>;
@@ -27,7 +22,7 @@ const UserContext = React.createContext<UserContextValue | undefined>(
 );
 
 export function UserProvider({ children }: { children: React.ReactNode }) {
-  const [quota, setQuota] = React.useState<QuotaState | null>(null);
+  const [quota, setQuota] = React.useState<ClientQuotaState | null>(null);
   const [quotaLoading, setQuotaLoading] = React.useState(true);
   const [quotaError, setQuotaError] = React.useState<Error | null>(null);
   const requestIdRef = React.useRef(0);
@@ -42,7 +37,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
       if (!response.ok) {
         throw new Error('Failed to fetch quota');
       }
-      const data = await response.json();
+      const data = clientQuotaStateSchema.parse(await response.json());
       if (!mountedRef.current || requestId !== requestIdRef.current) return;
       setQuota(data);
     } catch (err) {

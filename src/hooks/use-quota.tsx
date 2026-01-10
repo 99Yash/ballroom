@@ -1,10 +1,11 @@
 'use client';
 
-import type { QuotaInfo, QuotaState } from '~/contexts/user-context';
+import type { ClientQuotaInfo, ClientQuotaState } from '~/lib/quota';
 import { useUserContext } from '~/contexts/user-context';
 import { APP_CONFIG } from '~/lib/constants';
 
-export type { QuotaInfo, QuotaState };
+// Re-export client types for consumers
+export type { ClientQuotaInfo, ClientQuotaState };
 
 export function useQuota() {
   const { quota, quotaLoading, quotaError, refetchQuota } = useUserContext();
@@ -16,10 +17,10 @@ export function useQuota() {
   };
 }
 
-export function isQuotaLow(quota: QuotaInfo): boolean {
+export function isQuotaLow(quota: ClientQuotaInfo): boolean {
   return quota.percentageUsed >= APP_CONFIG.quota.warningThreshold;
 }
 
-export function isQuotaExceeded(quota: QuotaInfo): boolean {
+export function isQuotaExceeded(quota: ClientQuotaInfo): boolean {
   return quota.remaining <= 0;
 }

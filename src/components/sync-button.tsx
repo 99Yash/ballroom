@@ -3,6 +3,7 @@
 import { ChevronDown, Clock, FastForward, RotateCcw } from 'lucide-react';
 import * as React from 'react';
 import { toast } from 'sonner';
+import * as z from 'zod/v4';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import {
@@ -33,6 +34,11 @@ interface SyncStatus {
   totalVideos: number;
 }
 
+const syncStatusSchema = z.object({
+  lastSyncAt: z.string().nullable(),
+  totalVideos: z.number(),
+});
+
 const isDevelopment = process.env.NODE_ENV === 'development';
 
 export function SyncButton({
@@ -49,10 +55,11 @@ export function SyncButton({
     try {
       const response = await fetch('/api/sync-status');
       if (response.ok) {
-        const data = await response.json();
+        const data = syncStatusSchema.parse(await response.json());
         setSyncStatus(data);
       }
-    } catch {}
+    } catch {
+    }
   }, []);
 
   React.useEffect(() => {

@@ -1,8 +1,7 @@
 import { clsx, type ClassValue } from 'clsx';
-import {
-  formatDistanceToNowStrict,
-  type FormatDistanceToNowStrictOptions,
-} from 'date-fns';
+import { formatDistanceToNowStrict } from 'date-fns';
+import { enUS } from 'date-fns/locale';
+import type { Locale } from 'date-fns/locale';
 import { twMerge } from 'tailwind-merge';
 import * as z from 'zod/v4';
 import {
@@ -267,13 +266,33 @@ function formatDistance(token: string, count: number): string {
   );
 }
 
+const relativeTimeLocale = {
+  ...enUS,
+  formatDistance: (token: string, count: number) => formatDistance(token, count),
+} satisfies Locale;
+
+export interface FormatTimeToNowOptions {
+  /** Switch to formatted date display after this many days (default: never) */
+  showDateAfterDays?: number;
+  /** Add suffix like "ago" (default: true) */
+  addSuffix?: boolean;
+  /** Unit to round to */
+  unit?: 'second' | 'minute' | 'hour' | 'day' | 'month' | 'year';
+  /** Rounding method */
+  roundingMethod?: 'floor' | 'ceil' | 'round';
+}
+
 export function formatTimeToNow(
   date: Date | string | number,
-  {
-    showDateAfterDays = Infinity,
-  }: { showDateAfterDays?: number } = {},
-  options?: FormatDistanceToNowStrictOptions
+  options: FormatTimeToNowOptions = {}
 ): string {
+  const {
+    showDateAfterDays = Infinity,
+    addSuffix = true,
+    unit,
+    roundingMethod,
+  } = options;
+
   const dateObj = new Date(date);
   const daysDiff = Math.floor(
     (new Date().getTime() - dateObj.getTime()) / (1000 * 60 * 60 * 24)
@@ -284,11 +303,10 @@ export function formatTimeToNow(
   }
 
   return formatDistanceToNowStrict(dateObj, {
-    locale: {
-      formatDistance,
-    },
-    addSuffix: true,
-    ...options,
+    locale: relativeTimeLocale,
+    addSuffix,
+    unit,
+    roundingMethod,
   });
 }
 

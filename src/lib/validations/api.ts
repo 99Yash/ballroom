@@ -45,6 +45,10 @@ export const completeOnboardingSchema = z.object({
     .max(20, 'Cannot create more than 20 categories'),
 });
 
+/**
+ * Parses JSON from a Request body.
+ * Returns an empty object for empty/whitespace-only bodies (allows optional body requests).
+ */
 export async function parseRequestBody(request: Request): Promise<unknown> {
   try {
     const text = await request.text();

@@ -2,20 +2,16 @@
 
 import type { Variants } from 'motion/react';
 import { AnimatePresence, motion, useAnimation } from 'motion/react';
-import type { HTMLAttributes } from 'react';
-import * as React from 'react';
-import { useAnimatedIcon } from '~/hooks/use-animated-icon';
-import { cn } from '~/lib/utils';
+import {
+  createAnimatedIcon,
+  type AnimatedIconHandle,
+  type AnimatedIconProps,
+} from './create-animated-icon';
 
-export interface CalendarDaysIconHandle {
-  startAnimation: () => void;
-  stopAnimation: () => void;
-}
+type AnimationControls = ReturnType<typeof useAnimation>;
 
-interface CalendarDaysIconProps extends HTMLAttributes<HTMLDivElement> {
-  size?: number;
-  animate?: boolean;
-}
+export type CalendarDaysIconHandle = AnimatedIconHandle;
+export type CalendarDaysIconProps = AnimatedIconProps;
 
 const DOTS = [
   { cx: 8, cy: 14 },
@@ -45,100 +41,51 @@ const VARIANTS: Variants = {
   }),
 };
 
-const CalendarDaysIcon = React.forwardRef<
-  CalendarDaysIconHandle,
-  CalendarDaysIconProps
->(
-  (
-    {
-      onMouseEnter,
-      onMouseLeave,
-      className,
-      size = 28,
-      animate = false,
-      ...props
-    },
-    ref
-  ) => {
-    const controls = useAnimation();
-    const isControlledRef = React.useRef(false);
+function CalendarDaysSvg({
+  controls,
+  size,
+}: {
+  controls: AnimationControls;
+  size: number;
+}) {
+  return (
+    <svg
+      fill="none"
+      height={size}
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="2"
+      viewBox="0 0 24 24"
+      width={size}
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <path d="M8 2v4" />
+      <path d="M16 2v4" />
+      <rect height="18" rx="2" width="18" x="3" y="4" />
+      <path d="M3 10h18" />
+      <AnimatePresence>
+        {DOTS.map((dot, index) => (
+          <motion.circle
+            animate={controls}
+            custom={index}
+            cx={dot.cx}
+            cy={dot.cy}
+            fill="currentColor"
+            initial="normal"
+            key={`${dot.cx}-${dot.cy}`}
+            r="1"
+            stroke="none"
+            variants={VARIANTS}
+          />
+        ))}
+      </AnimatePresence>
+    </svg>
+  );
+}
 
-    React.useImperativeHandle(ref, () => {
-      isControlledRef.current = true;
-      return {
-        startAnimation: () => controls.start('animate'),
-        stopAnimation: () => controls.start('normal'),
-      };
-    });
-
-    useAnimatedIcon(controls, animate, isControlledRef);
-
-    const handleMouseEnter = React.useCallback(
-      (e: React.MouseEvent<HTMLDivElement>) => {
-        if (isControlledRef.current || animate) {
-          onMouseEnter?.(e);
-        } else {
-          controls.start('animate');
-        }
-      },
-      [controls, onMouseEnter, animate]
-    );
-
-    const handleMouseLeave = React.useCallback(
-      (e: React.MouseEvent<HTMLDivElement>) => {
-        if (isControlledRef.current || animate) {
-          onMouseLeave?.(e);
-        } else {
-          controls.start('normal');
-        }
-      },
-      [controls, onMouseLeave, animate]
-    );
-
-    return (
-      <div
-        className={cn(className)}
-        onMouseEnter={handleMouseEnter}
-        onMouseLeave={handleMouseLeave}
-        {...props}
-      >
-        <svg
-          fill="none"
-          height={size}
-          stroke="currentColor"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth="2"
-          viewBox="0 0 24 24"
-          width={size}
-          xmlns="http://www.w3.org/2000/svg"
-        >
-          <path d="M8 2v4" />
-          <path d="M16 2v4" />
-          <rect height="18" rx="2" width="18" x="3" y="4" />
-          <path d="M3 10h18" />
-          <AnimatePresence>
-            {DOTS.map((dot, index) => (
-              <motion.circle
-                animate={controls}
-                custom={index}
-                cx={dot.cx}
-                cy={dot.cy}
-                fill="currentColor"
-                initial="normal"
-                key={`${dot.cx}-${dot.cy}`}
-                r="1"
-                stroke="none"
-                variants={VARIANTS}
-              />
-            ))}
-          </AnimatePresence>
-        </svg>
-      </div>
-    );
-  }
-);
-
-CalendarDaysIcon.displayName = 'CalendarDaysIcon';
+const CalendarDaysIcon = createAnimatedIcon(CalendarDaysSvg, {
+  displayName: 'CalendarDaysIcon',
+});
 
 export { CalendarDaysIcon };
