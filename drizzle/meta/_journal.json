@@ -57,6 +57,13 @@
       "when": 1767531291132,
       "tag": "0007_faulty_magus",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1767584658404,
+      "tag": "0008_goofy_turbo",
+      "breakpoints": true
     }
   ]
 }

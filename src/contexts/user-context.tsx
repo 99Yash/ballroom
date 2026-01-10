@@ -30,8 +30,11 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   const [quota, setQuota] = React.useState<QuotaState | null>(null);
   const [quotaLoading, setQuotaLoading] = React.useState(true);
   const [quotaError, setQuotaError] = React.useState<Error | null>(null);
+  const requestIdRef = React.useRef(0);
+  const mountedRef = React.useRef(true);
 
   const fetchQuota = React.useCallback(async () => {
+    const requestId = ++requestIdRef.current;
     try {
       setQuotaError(null);
       setQuotaLoading(true);
@@ -40,18 +43,25 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         throw new Error('Failed to fetch quota');
       }
       const data = await response.json();
+      if (!mountedRef.current || requestId !== requestIdRef.current) return;
       setQuota(data);
     } catch (err) {
       const error =
         err instanceof Error ? err : new Error('Failed to fetch quota');
+      if (!mountedRef.current || requestId !== requestIdRef.current) return;
       setQuotaError(error);
     } finally {
+      if (!mountedRef.current || requestId !== requestIdRef.current) return;
       setQuotaLoading(false);
     }
   }, []);
 
   React.useEffect(() => {
+    mountedRef.current = true;
     fetchQuota();
+    return () => {
+      mountedRef.current = false;
+    };
   }, [fetchQuota]);
 
   const value = React.useMemo(

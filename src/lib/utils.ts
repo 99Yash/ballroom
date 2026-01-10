@@ -227,9 +227,6 @@ export function removeLocalStorageItem(key: LocalStorageKey): void {
   }
 }
 
-/**
- * Format a date using Intl.DateTimeFormat
- */
 export function formatDate(
   date: Date | string | number,
   opts: Intl.DateTimeFormatOptions = {}
@@ -270,12 +267,6 @@ function formatDistance(token: string, count: number): string {
   );
 }
 
-/**
- * Format time relative to now with option to show absolute date after threshold
- * @param date - Date to format
- * @param showDateAfterDays - Show absolute date if older than this many days (default: Infinity)
- * @param options - Additional formatDistanceToNowStrict options
- */
 export function formatTimeToNow(
   date: Date | string | number,
   {
@@ -301,9 +292,6 @@ export function formatTimeToNow(
   });
 }
 
-/**
- * Format number in compact notation (1k, 1M, 1B)
- */
 export function formatNumber(num: number): string {
   if (num < 1000) return num.toString();
   if (num < 1_000_000) return `${(num / 1000).toFixed(1)}k`;
@@ -311,16 +299,10 @@ export function formatNumber(num: number): string {
   return `${(num / 1_000_000_000).toFixed(1)}B`;
 }
 
-/**
- * Truncate string to specified length with ellipsis
- */
 export function truncate(str: string, length: number): string {
   return str.length > length ? `${str.substring(0, length)}...` : str;
 }
 
-/**
- * Convert string to URL-friendly slug
- */
 export function slugify(str: string): string {
   return str
     .toLowerCase()
@@ -329,9 +311,6 @@ export function slugify(str: string): string {
     .replace(/--+/g, '-');
 }
 
-/**
- * Get base URL for the application
- */
 export function getBaseUrl(): string {
   if (typeof window !== 'undefined') return window.location.origin;
   if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;

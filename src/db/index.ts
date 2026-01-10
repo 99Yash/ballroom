@@ -1,17 +1,23 @@
 import 'dotenv/config';
 import { drizzle } from 'drizzle-orm/node-postgres';
-import { Pool } from 'pg';
+import { Pool, types } from 'pg';
 import { env } from '~/lib/env';
 
-/**
- * Database connection pool configuration
- * Using pg Pool for connection management in serverless environments
- */
 const pool = new Pool({
   connectionString: env.DATABASE_URL,
-  max: 10, // Maximum number of connections in the pool
-  idleTimeoutMillis: 30000, // Close idle connections after 30 seconds
-  connectionTimeoutMillis: 5000, // Fail if connection takes longer than 5 seconds
+  max: 10,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 5000,
+});
+
+// Ensure `timestamp` (without timezone) is treated as UTC when parsing into JS Dates.
+types.setTypeParser(types.builtins.TIMESTAMP, (value: string) => {
+  return new Date(value.replace(' ', 'T') + 'Z');
+});
+
+// Ensure casts between timestamptz and timestamp happen in UTC.
+pool.on('connect', (client) => {
+  void client.query("SET TIME ZONE 'UTC'");
 });
 
 export const db = drizzle({ client: pool });

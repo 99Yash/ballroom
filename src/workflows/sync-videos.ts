@@ -14,39 +14,6 @@ const syncPayloadSchema = z.object({
   userId: z.string().min(1, 'userId is required'),
 });
 
-/**
- * Centralized error handler for sync workflow tasks.
- *
- * **IMPORTANT: This function never returns normally. It always throws an error.**
- *
- * Handles different error types with appropriate metadata, logging, and retry behavior.
- * Sets common metadata fields for all errors, then applies type-specific handling.
- *
- * **Error Handling Strategy:**
- * - **AuthenticationError**: Non-retriable. Aborts the task run immediately since the user
- *   must re-authenticate. Sets `errorType: 'auth_error'` and `aborted: true` metadata.
- *   Also captures `authErrorType` and `requiresReauthentication` for debugging.
- *
- * - **AppError with QUOTA_EXCEEDED**: Non-retriable. Aborts the task run since quota limits
- *   won't resolve with retries. Sets `errorType: 'quota_exceeded'` and `aborted: true` metadata.
- *
- * - **All other errors**: Retriable. Re-throws the error to trigger Trigger.dev's retry mechanism.
- *   Sets `errorType: 'retriable_error'` and `willRetry: true` metadata before re-throwing.
- *
- * **Common Metadata Set:**
- * - `status: 'failed'` - Indicates the sync failed
- * - `errorMessage` - String representation of the error message
- * - `endTime` - ISO timestamp when the error occurred
- *
- * @param error - The error that occurred during sync. Can be any type (Error, AppError, AuthenticationError, etc.)
- * @param payload - The task payload containing the userId for logging and context
- * @param ctx - Task context containing the run ID for logging and tracking
- *
- * @throws {AbortTaskRunError} For AuthenticationError and QUOTA_EXCEEDED errors, preventing retries
- * @throws {Error} For retriable errors, re-throws the original error to trigger retry mechanism
- *
- * @returns {never} This function never returns normally - it always throws
- */
 function handleSyncError(
   error: unknown,
   payload: { userId: string },

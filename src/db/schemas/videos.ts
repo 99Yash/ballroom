@@ -96,7 +96,7 @@ export const videos = pgTable(
     }),
     lastAnalyzedAt: timestamp('last_analyzed_at'),
     syncStatus: videoSyncStatusEnum('sync_status').default('active').notNull(),
-    lastSeenAt: timestamp('last_seen_at'),
+    lastSeenAt: timestamp('last_seen_at', { withTimezone: true }),
     ...lifecycle_dates,
   },
   (table) => [

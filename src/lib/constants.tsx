@@ -40,7 +40,6 @@ export const APP_CONFIG = {
   youtube: {
     defaultSyncLimit: 100,
     maxSyncLimit: 500,
-    apiPageSize: 50,
   },
   ai: {
     batchSize: 10,
@@ -51,7 +50,6 @@ export const APP_CONFIG = {
     quickSyncLimit: 50,
     extendedSyncLimit: 500,
     batchSize: 50,
-    lastSeenAtUpdateThresholdMs: 60 * 60 * 1000, // 1 hour
     consecutiveExistingBatchesThreshold: 2,
   },
   quota: {

@@ -6,11 +6,7 @@ import { categorizeUserVideos } from '~/lib/ai/categorize';
 import { requireSession } from '~/lib/auth/session';
 import { AppError, createErrorResponse } from '~/lib/errors';
 import { logger } from '~/lib/logger';
-import {
-  checkAndResetQuotaIfNeeded,
-  formatQuotaForClient,
-  getUserQuotas,
-} from '~/lib/quota';
+import { formatQuotaForClient, getUserQuotas } from '~/lib/quota';
 import {
   categorizeVideosSchema,
   parseRequestBody,
@@ -36,8 +32,6 @@ export async function POST(request: Request) {
         message: 'No categories found. Please create some categories first.',
       });
     }
-
-    await checkAndResetQuotaIfNeeded(session.user.id);
 
     const result = await categorizeUserVideos(session.user.id, force);
 

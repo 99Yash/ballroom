@@ -92,6 +92,12 @@ function getNextQuotaResetDate(): Date {
 }
 
 export async function getUserQuotas(userId: string): Promise<UserQuotas> {
+  const nextResetDate = getNextQuotaResetDate();
+  await db
+    .update(user)
+    .set(buildQuotaResetValues(nextResetDate))
+    .where(buildQuotaResetNeededCondition(userId));
+
   const [userData] = await db
     .select({
       syncQuotaUsed: user.syncQuotaUsed,
@@ -122,80 +128,6 @@ export async function getUserQuotas(userId: string): Promise<UserQuotas> {
   };
 }
 
-/**
- * Checks if quota reset is needed and performs the reset atomically.
- * Resets quota if:
- * - User has no quotaResetAt date set, OR
- * - Current date >= quotaResetAt date
- *
- * The WHERE clause ensures the update only happens when reset is needed,
- * making this operation idempotent and safe to call multiple times.
- *
- * @param userId - The user ID to check and reset quota for
- * @returns true if quota was reset, false if reset was not needed or user not found
- */
-export async function checkAndResetQuotaIfNeeded(
-  userId: string
-): Promise<boolean> {
-  const nextResetDate = getNextQuotaResetDate();
-
-  const result = await db
-    .update(user)
-    .set(buildQuotaResetValues(nextResetDate))
-    .where(buildQuotaResetNeededCondition(userId));
-
-  const rowsAffected = result.rowCount ?? 0;
-  const didReset = rowsAffected > 0;
-
-  if (didReset) {
-    logger.info('Quota reset for user', {
-      userId,
-      nextResetAt: nextResetDate.toISOString(),
-    });
-  }
-
-  return didReset;
-}
-
-export async function checkQuota(
-  userId: string,
-  quotaType: QuotaType,
-  amount: number = 1
-): Promise<QuotaStatus> {
-  await checkAndResetQuotaIfNeeded(userId);
-
-  const quotas = await getUserQuotas(userId);
-  const quota = quotas[quotaType];
-
-  if (quota.used + amount > quota.limit) {
-    const daysUntilReset = quota.resetAt
-      ? Math.ceil(
-          (quota.resetAt.getTime() - Date.now()) / (1000 * 60 * 60 * 24)
-        )
-      : 0;
-
-    throw new AppError({
-      code: 'QUOTA_EXCEEDED',
-      message: `${getQuotaTypeDisplayName(quotaType)} quota exceeded. Used: ${
-        quota.used
-      }/${quota.limit}. Resets in ${daysUntilReset} days.`,
-    });
-  }
-
-  return quota;
-}
-
-/**
- * Atomically checks and increments quota within a database transaction.
- * This prevents race conditions by using a conditional UPDATE that only succeeds
- * if the quota limit would not be exceeded. All operations happen within a single transaction.
- *
- * @param tx - The transaction context from db.transaction
- * @param userId - The user ID to check and increment quota for
- * @param quotaType - Type of quota to check and increment ('sync' or 'categorize')
- * @param amount - Amount to increment by. Zero values are silently ignored (no-op). Negative values throw an error.
- * @throws {AppError} If user is not found (NOT_FOUND), quota would be exceeded (QUOTA_EXCEEDED), or amount is negative (BAD_REQUEST)
- */
 export async function checkAndIncrementQuotaWithinTx(
   tx: TransactionContext,
   userId: string,
@@ -215,8 +147,17 @@ export async function checkAndIncrementQuotaWithinTx(
     .update(user)
     .set(buildQuotaResetValues(nextResetDate))
     .where(buildQuotaResetNeededCondition(userId));
+  const update = await tx
+    .update(user)
+    .set(buildQuotaIncrementUpdate(quotaType, amount))
+    .where(
+      and(eq(user.id, userId), buildQuotaLimitCheckCondition(quotaType, amount))
+    )
+    .returning({ id: user.id });
 
-  const [userData] = await tx
+  if (update.length === 1) return;
+
+  const [current] = await tx
     .select({
       syncQuotaUsed: user.syncQuotaUsed,
       syncQuotaLimit: user.syncQuotaLimit,
@@ -227,119 +168,22 @@ export async function checkAndIncrementQuotaWithinTx(
     .where(eq(user.id, userId))
     .limit(1);
 
-  if (!userData) {
+  if (!current) {
     throw new AppError({
       code: 'NOT_FOUND',
       message: `User not found: ${userId}`,
     });
   }
 
-  const { used: currentUsed, limit } = getQuotaValues(userData, quotaType);
-
-  if (currentUsed + amount > limit) {
-    throw new AppError({
-      code: 'QUOTA_EXCEEDED',
-      message: `${getQuotaTypeDisplayName(
-        quotaType
-      )} quota exceeded. Used: ${currentUsed}/${limit}. Resets monthly.`,
-    });
-  }
-
-  const result = await tx
-    .update(user)
-    .set(buildQuotaIncrementUpdate(quotaType, amount))
-    .where(
-      and(eq(user.id, userId), buildQuotaLimitCheckCondition(quotaType, amount))
-    );
-
-  const rowsAffected = result.rowCount ?? 0;
-  if (rowsAffected === 0) {
-    const [recheckData] = await tx
-      .select({
-        syncQuotaUsed: user.syncQuotaUsed,
-        syncQuotaLimit: user.syncQuotaLimit,
-        categorizeQuotaUsed: user.categorizeQuotaUsed,
-        categorizeQuotaLimit: user.categorizeQuotaLimit,
-      })
-      .from(user)
-      .where(eq(user.id, userId))
-      .limit(1);
-
-    if (!recheckData) {
-      throw new AppError({
-        code: 'NOT_FOUND',
-        message: `User not found: ${userId}`,
-      });
-    }
-
-    const { used: recheckUsed, limit: recheckLimit } = getQuotaValues(
-      recheckData,
+  const { used, limit } = getQuotaValues(current, quotaType);
+  throw new AppError({
+    code: 'QUOTA_EXCEEDED',
+    message: `${getQuotaTypeDisplayName(
       quotaType
-    );
-
-    if (recheckUsed + amount > recheckLimit) {
-      throw new AppError({
-        code: 'QUOTA_EXCEEDED',
-        message: `${getQuotaTypeDisplayName(
-          quotaType
-        )} quota exceeded. Used: ${recheckUsed}/${recheckLimit}. Resets monthly.`,
-      });
-    }
-
-    const retryResult = await tx
-      .update(user)
-      .set(buildQuotaIncrementUpdate(quotaType, amount))
-      .where(
-        and(
-          eq(user.id, userId),
-          buildQuotaLimitCheckCondition(quotaType, amount)
-        )
-      );
-
-    const retryRowsAffected = retryResult.rowCount ?? 0;
-    if (retryRowsAffected === 0) {
-      logger.error(
-        'Quota update failed after retry due to concurrent modification',
-        {
-          userId,
-          quotaType,
-          amount,
-          recheckUsed,
-          recheckLimit,
-        }
-      );
-
-      throw new AppError({
-        code: 'INTERNAL_SERVER_ERROR',
-        message:
-          'Failed to update quota due to a concurrent update. Please retry the request.',
-      });
-    }
-
-    logger.warn(
-      'Quota update race condition detected and resolved with retry',
-      {
-        userId,
-        quotaType,
-        amount,
-        recheckUsed,
-        recheckLimit,
-      }
-    );
-  }
-
-  logger.debug('Quota checked and incremented atomically in transaction', {
-    userId,
-    quotaType,
-    amount,
-    newUsed: currentUsed + amount,
-    limit,
+    )} quota exceeded. Used: ${used}/${limit}. Resets monthly.`,
   });
 }
 
-/**
- * Helper function to extract quota values (used and limit) from user data based on quota type.
- */
 function getQuotaValues(
   userData: {
     syncQuotaUsed: number;
@@ -357,10 +201,6 @@ function getQuotaValues(
       };
 }
 
-/**
- * Helper function to build the WHERE clause condition for quota limit check.
- * Ensures quota won't exceed limit when incrementing.
- */
 function buildQuotaLimitCheckCondition(
   quotaType: QuotaType,
   amount: number
@@ -370,16 +210,10 @@ function buildQuotaLimitCheckCondition(
     : sql`${user.categorizeQuotaUsed} + ${amount} <= ${user.categorizeQuotaLimit}`;
 }
 
-/**
- * Helper function to get the display name for a quota type.
- */
 function getQuotaTypeDisplayName(quotaType: QuotaType): string {
   return quotaType === 'sync' ? 'Sync' : 'Categorization';
 }
 
-/**
- * Builds the SET values for quota reset (zeroes out usage, sets next reset date).
- */
 function buildQuotaResetValues(nextResetDate: Date) {
   return {
     syncQuotaUsed: 0,
@@ -388,24 +222,16 @@ function buildQuotaResetValues(nextResetDate: Date) {
   };
 }
 
-/**
- * Builds the WHERE condition for checking if quota reset is needed.
- * Returns true if quotaResetAt is null or has passed.
- */
 function buildQuotaResetNeededCondition(userId: string) {
   return and(
     eq(user.id, userId),
     or(
       isNull(user.quotaResetAt),
-      sql`${user.quotaResetAt} <= (NOW() AT TIME ZONE 'UTC')`
+      sql`${user.quotaResetAt} <= CURRENT_TIMESTAMP`
     )
   );
 }
 
-/**
- * Helper function to build the quota increment update object based on quota type.
- * Returns the appropriate Drizzle update object for the given quota type.
- */
 function buildQuotaIncrementUpdate(
   quotaType: QuotaType,
   amount: number
@@ -415,17 +241,6 @@ function buildQuotaIncrementUpdate(
     : { categorizeQuotaUsed: sql`${user.categorizeQuotaUsed} + ${amount}` };
 }
 
-/**
- * Increments quota usage within a database transaction.
- * This ensures quota updates are atomic with other operations (e.g., video categorization).
- * NOTE: This function does NOT check quota limits. Use checkAndIncrementQuotaWithinTx for atomic check-and-increment.
- *
- * @param tx - The transaction context from db.transaction
- * @param userId - The user ID to increment quota for
- * @param quotaType - Type of quota to increment ('sync' or 'categorize')
- * @param amount - Amount to increment by. Zero values are silently ignored (no-op). Negative values throw an error.
- * @throws {AppError} If user is not found (NOT_FOUND) or amount is negative (BAD_REQUEST)
- */
 export async function incrementQuotaWithinTx(
   tx: TransactionContext,
   userId: string,
@@ -440,13 +255,13 @@ export async function incrementQuotaWithinTx(
   }
   if (amount === 0) return;
 
-  const result = await tx
+  const update = await tx
     .update(user)
     .set(buildQuotaIncrementUpdate(quotaType, amount))
-    .where(eq(user.id, userId));
+    .where(eq(user.id, userId))
+    .returning({ id: user.id });
 
-  const rowsAffected = result.rowCount ?? 0;
-  if (rowsAffected === 0) {
+  if (update.length === 0) {
     throw new AppError({
       code: 'NOT_FOUND',
       message: `User not found: ${userId}`,
@@ -458,54 +273,6 @@ export async function incrementQuotaWithinTx(
     quotaType,
     amount,
   });
-}
-
-/**
- * Increments quota usage outside of a transaction.
- * NOTE: This function does NOT check quota limits. Use checkQuota before calling if limits should be enforced.
- *
- * @param userId - The user ID to increment quota for
- * @param quotaType - Type of quota to increment ('sync' or 'categorize')
- * @param amount - Amount to increment by. Zero values are silently ignored (no-op). Negative values throw an error.
- * @throws {AppError} If user is not found (NOT_FOUND) or amount is negative (BAD_REQUEST)
- */
-export async function incrementQuota(
-  userId: string,
-  quotaType: QuotaType,
-  amount: number
-): Promise<void> {
-  if (amount < 0) {
-    throw new AppError({
-      code: 'BAD_REQUEST',
-      message: `Invalid quota amount: ${amount}. Amount must be non-negative.`,
-    });
-  }
-  if (amount === 0) return;
-
-  const result = await db
-    .update(user)
-    .set(buildQuotaIncrementUpdate(quotaType, amount))
-    .where(eq(user.id, userId));
-
-  const rowsAffected = result.rowCount ?? 0;
-  if (rowsAffected === 0) {
-    throw new AppError({ code: 'NOT_FOUND', message: 'User not found' });
-  }
-
-  logger.debug('Quota incremented', {
-    userId,
-    quotaType,
-    amount,
-  });
-}
-
-export async function getRemainingQuota(
-  userId: string,
-  quotaType: QuotaType
-): Promise<number> {
-  await checkAndResetQuotaIfNeeded(userId);
-  const quotas = await getUserQuotas(userId);
-  return quotas[quotaType].remaining;
 }
 
 export function formatQuotaForClient(quotas: UserQuotas) {

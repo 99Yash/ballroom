@@ -23,7 +23,7 @@ export const user = pgTable(
     categorizeQuotaLimit: integer('categorize_quota_limit')
       .default(500)
       .notNull(),
-    quotaResetAt: timestamp('quota_reset_at'),
+    quotaResetAt: timestamp('quota_reset_at', { withTimezone: true }),
     ...lifecycle_dates,
   },
   (table) => [index('idx_user_quota_reset_at').on(table.quotaResetAt)]

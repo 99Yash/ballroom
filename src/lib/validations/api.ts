@@ -45,15 +45,11 @@ export const completeOnboardingSchema = z.object({
     .max(20, 'Cannot create more than 20 categories'),
 });
 
-/**
- * Safely parse JSON from a Request body
- * Handles parsing errors with proper error responses
- */
-export async function parseRequestBody(
-  request: Request
-): Promise<unknown> {
+export async function parseRequestBody(request: Request): Promise<unknown> {
   try {
-    return await request.json();
+    const text = await request.text();
+    if (text.trim().length === 0) return {};
+    return JSON.parse(text) as unknown;
   } catch (parseError) {
     throw new AppError({
       code: 'BAD_REQUEST',
