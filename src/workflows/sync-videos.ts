@@ -17,7 +17,7 @@ const syncPayloadSchema = z.object({
 function handleSyncError(
   error: unknown,
   payload: { userId: string },
-  ctx: { run: { id: string } }
+  runId: string
 ): never {
   metadata
     .set('status', 'failed')
@@ -33,7 +33,7 @@ function handleSyncError(
 
     logger.error('Sync aborted - auth error', {
       userId: payload.userId,
-      runId: ctx.run.id,
+      runId,
       authErrorType: error.authErrorType,
       error: error.message,
     });
@@ -45,7 +45,7 @@ function handleSyncError(
 
     logger.warn('Sync aborted - quota exceeded', {
       userId: payload.userId,
-      runId: ctx.run.id,
+      runId,
       error: error.message,
     });
     throw new AbortTaskRunError(error.message);
@@ -55,7 +55,7 @@ function handleSyncError(
 
   logger.error('Sync failed - will retry', {
     userId: payload.userId,
-    runId: ctx.run.id,
+    runId,
     error: error instanceof Error ? error.message : String(error),
   });
 
@@ -81,10 +81,7 @@ export const initialSyncTask = schemaTask({
     factor: 2,
     randomize: true,
   },
-  catchError: async ({ error, ctx, payload }) => {
-    handleSyncError(error, payload, ctx);
-  },
-  run: async ({ userId }) => {
+  run: async ({ userId }, { ctx }) => {
     logger.info('Starting initial sync for user', { userId });
 
     await tags.add(`user:${userId}`);
@@ -99,28 +96,32 @@ export const initialSyncTask = schemaTask({
 
     metadata.set('status', 'syncing');
 
-    const syncResult = await fullSync(userId, { checkQuota: true });
+    try {
+      const syncResult = await fullSync(userId, { checkQuota: true });
 
-    logger.info('Initial sync completed', {
-      userId,
-      synced: syncResult.synced,
-      new: syncResult.new,
-      existing: syncResult.existing,
-      unliked: syncResult.unliked,
-      reachedEnd: syncResult.reachedEnd,
-    });
+      logger.info('Initial sync completed', {
+        userId,
+        synced: syncResult.synced,
+        new: syncResult.new,
+        existing: syncResult.existing,
+        unliked: syncResult.unliked,
+        reachedEnd: syncResult.reachedEnd,
+      });
 
-    metadata
-      .set('status', 'completed')
-      .set('syncCompleted', true)
-      .set('videosSynced', syncResult.synced)
-      .set('newVideos', syncResult.new)
-      .set('existingVideos', syncResult.existing)
-      .set('unlikedVideos', syncResult.unliked)
-      .set('reachedEnd', syncResult.reachedEnd)
-      .set('endTime', new Date().toISOString());
+      metadata
+        .set('status', 'completed')
+        .set('syncCompleted', true)
+        .set('videosSynced', syncResult.synced)
+        .set('newVideos', syncResult.new)
+        .set('existingVideos', syncResult.existing)
+        .set('unlikedVideos', syncResult.unliked)
+        .set('reachedEnd', syncResult.reachedEnd)
+        .set('endTime', new Date().toISOString());
 
-    return { sync: syncResult };
+      return { sync: syncResult };
+    } catch (error) {
+      handleSyncError(error, { userId }, ctx.run.id);
+    }
   },
 });
 
@@ -142,10 +143,7 @@ export const incrementalSyncTask = schemaTask({
     factor: 2,
     randomize: true,
   },
-  catchError: async ({ error, ctx, payload }) => {
-    handleSyncError(error, payload, ctx);
-  },
-  run: async ({ userId }) => {
+  run: async ({ userId }, { ctx }) => {
     logger.info('Starting incremental sync for user', { userId });
 
     await tags.add(`user:${userId}`);
@@ -161,24 +159,28 @@ export const incrementalSyncTask = schemaTask({
 
     metadata.set('status', 'syncing');
 
-    const syncResult = await quickSync(userId, { checkQuota: true });
+    try {
+      const syncResult = await quickSync(userId, { checkQuota: true });
 
-    logger.info('Incremental sync completed', {
-      userId,
-      synced: syncResult.synced,
-      new: syncResult.new,
-      existing: syncResult.existing,
-    });
+      logger.info('Incremental sync completed', {
+        userId,
+        synced: syncResult.synced,
+        new: syncResult.new,
+        existing: syncResult.existing,
+      });
 
-    metadata
-      .set('status', 'completed')
-      .set('syncCompleted', true)
-      .set('videosSynced', syncResult.synced)
-      .set('newVideos', syncResult.new)
-      .set('existingVideos', syncResult.existing)
-      .set('reachedEnd', syncResult.reachedEnd)
-      .set('endTime', new Date().toISOString());
+      metadata
+        .set('status', 'completed')
+        .set('syncCompleted', true)
+        .set('videosSynced', syncResult.synced)
+        .set('newVideos', syncResult.new)
+        .set('existingVideos', syncResult.existing)
+        .set('reachedEnd', syncResult.reachedEnd)
+        .set('endTime', new Date().toISOString());
 
-    return { sync: syncResult };
+      return { sync: syncResult };
+    } catch (error) {
+      handleSyncError(error, { userId }, ctx.run.id);
+    }
   },
 });

@@ -22,6 +22,7 @@ import {
   TooltipTrigger,
 } from '~/components/ui/tooltip';
 import { isQuotaExceeded, isQuotaLow, useQuota } from '~/hooks/use-quota';
+import { clientQuotaStateSchema } from '~/lib/quota-client';
 import { cn, formatTimeToNow } from '~/lib/utils';
 
 interface SyncButtonProps {
@@ -37,6 +38,30 @@ interface SyncStatus {
 const syncStatusSchema = z.object({
   lastSyncAt: z.string().nullable(),
   totalVideos: z.number(),
+});
+
+const youtubeSyncResponseSchema = z.object({
+  synced: z.number(),
+  new: z.number(),
+  existing: z.number(),
+  unliked: z.number(),
+  reachedEnd: z.boolean(),
+  message: z.string().optional(),
+  quota: clientQuotaStateSchema.optional(),
+  quotaFetchFailed: z.boolean().optional(),
+});
+
+const categorizeResponseSchema = z.object({
+  categorized: z.number(),
+  total: z.number(),
+  skipped: z.number(),
+  message: z.string().optional(),
+  quota: clientQuotaStateSchema.optional(),
+  quotaFetchFailed: z.boolean().optional(),
+});
+
+const errorResponseSchema = z.object({
+  error: z.string().optional(),
 });
 
 const isDevelopment = process.env.NODE_ENV === 'development';
@@ -79,11 +104,11 @@ export function SyncButton({
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to sync');
+        const errorJson = errorResponseSchema.safeParse(await response.json());
+        throw new Error(errorJson.success ? (errorJson.data.error ?? 'Failed to sync') : 'Failed to sync');
       }
 
-      const result = await response.json();
+      const result = youtubeSyncResponseSchema.parse(await response.json());
 
       const message =
         result.new > 0
@@ -164,11 +189,15 @@ export function SyncButton({
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to categorize');
+        const errorJson = errorResponseSchema.safeParse(await response.json());
+        throw new Error(
+          errorJson.success
+            ? (errorJson.data.error ?? 'Failed to categorize')
+            : 'Failed to categorize'
+        );
       }
 
-      const result = await response.json();
+      const result = categorizeResponseSchema.parse(await response.json());
 
       const message =
         result.categorized > 0

@@ -44,13 +44,18 @@ export async function GET(request: Request) {
         .filter((w) => w.length > 0)
         .map((w) => {
           const escaped = w.replace(/([&|!():\\])/g, '\\$1');
-          return `${escaped}:*`;
+          return escaped.length > 0 ? `${escaped}:*` : '';
         })
+        .filter((w) => w.length > 0)
         .join(' & ');
-      
-      // Use to_tsquery with the built query string
-      // Drizzle's sql template will properly parameterize this, preventing SQL injection
-      const tsquery = sql`to_tsquery('simple', ${words})`;
+
+      // Avoid to_tsquery('') which will throw a SQL error. If we can't form a valid
+      // prefix query, fall back to plainto_tsquery on the raw query.
+      const tsquery =
+        words.length > 0
+          ? sql`to_tsquery('simple', ${words})`
+          : sql`plainto_tsquery('simple', ${searchQuery})`;
+
       searchExpr = createVideoSearchVector(
         videos.title,
         videos.description,
@@ -63,10 +68,13 @@ export async function GET(request: Request) {
       searchRank = sql`ts_rank(${searchExpr}, ${tsquery})`;
     }
 
-    const page = parseInt(searchParams.get('page') || '1', 10);
+    const rawPage = Number(searchParams.get('page') ?? '1');
+    const rawLimit = Number(searchParams.get('limit') ?? '50');
+    const page =
+      Number.isFinite(rawPage) && rawPage >= 1 ? Math.floor(rawPage) : 1;
     const limit = Math.min(
-      parseInt(searchParams.get('limit') || '50', 10),
-      100
+      100,
+      Number.isFinite(rawLimit) && rawLimit >= 1 ? Math.floor(rawLimit) : 50
     );
     const offset = (page - 1) * limit;
 
