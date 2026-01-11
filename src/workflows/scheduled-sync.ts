@@ -1,8 +1,8 @@
 import { logger, metadata, schedules, tags } from '@trigger.dev/sdk';
-import { isNotNull } from 'drizzle-orm';
+import { and, asc, gt, isNotNull } from 'drizzle-orm';
 import { db } from '~/db';
 import { user } from '~/db/schemas';
-import { incrementalSyncTask } from './sync-videos';
+import { batchTriggerIncrementalSync } from './sync-videos';
 
 /**
  * Batch size for processing users
@@ -12,6 +12,7 @@ import { incrementalSyncTask } from './sync-videos';
  * - Trigger.dev batch limits (max ~1000 recommended)
  */
 const USER_BATCH_SIZE = 500;
+const BATCH_ID_SAMPLE_SIZE = 10;
 
 /**
  * Hourly sync schedule - runs every hour
@@ -52,22 +53,27 @@ export const hourlySyncSchedule = schedules.task({
       .set('totalBatches', 0)
       .set('startTime', new Date().toISOString());
 
-    let offset = 0;
     let totalUsersProcessed = 0;
     let batchCount = 0;
-    const batchIds: string[] = [];
+    let lastUserId: string | undefined;
+    const batchIdsSample: string[] = [];
 
     while (true) {
       const userBatch = await db
         .select({ id: user.id })
         .from(user)
-        .where(isNotNull(user.onboardedAt))
+        .where(
+          lastUserId
+            ? and(isNotNull(user.onboardedAt), gt(user.id, lastUserId))
+            : isNotNull(user.onboardedAt)
+        )
+        .orderBy(asc(user.id))
         .limit(USER_BATCH_SIZE)
-        .offset(offset);
+        .offset(0);
 
       if (userBatch.length === 0) {
         logger.info('No more users to process', {
-          offset,
+          lastUserId,
           totalUsersProcessed,
         });
         break;
@@ -76,24 +82,29 @@ export const hourlySyncSchedule = schedules.task({
       logger.info('Processing user batch', {
         batchNumber: batchCount + 1,
         batchSize: userBatch.length,
-        offset,
+        lastUserId,
         totalSoFar: totalUsersProcessed + userBatch.length,
       });
 
-      const batchHandle = await incrementalSyncTask.batchTrigger(
-        userBatch.map((u) => ({ payload: { userId: u.id } }))
+      const batchHandle = await batchTriggerIncrementalSync(
+        userBatch.map((u) => u.id)
       );
 
       totalUsersProcessed += userBatch.length;
       batchCount++;
-      batchIds.push(batchHandle.batchId);
+      if (batchIdsSample.length < BATCH_ID_SAMPLE_SIZE) {
+        batchIdsSample.push(batchHandle.batchId);
+      }
 
       metadata
         .set('status', 'processing_batches')
         .set('usersProcessed', totalUsersProcessed)
         .set('totalBatches', batchCount)
-        .set('currentOffset', offset + userBatch.length)
-        .append('batchIds', batchHandle.batchId);
+        .set('lastUserId', userBatch[userBatch.length - 1]?.id ?? null);
+
+      if (batchIdsSample.length <= BATCH_ID_SAMPLE_SIZE) {
+        metadata.set('batchIdsSample', batchIdsSample);
+      }
 
       logger.info('Batch triggered successfully', {
         batchId: batchHandle.batchId,
@@ -102,7 +113,7 @@ export const hourlySyncSchedule = schedules.task({
         totalProcessed: totalUsersProcessed,
       });
 
-      offset += USER_BATCH_SIZE;
+      lastUserId = userBatch[userBatch.length - 1]?.id;
 
       if (userBatch.length < USER_BATCH_SIZE) {
         logger.info('Reached end of users', {
@@ -120,13 +131,13 @@ export const hourlySyncSchedule = schedules.task({
     logger.info('Hourly sync completed', {
       totalUsersProcessed,
       totalBatches: batchCount,
-      batchIds: batchIds.slice(0, 10), // Log first 10 batch IDs to avoid bloat
+      batchIdsSample,
     });
 
     return {
       usersProcessed: totalUsersProcessed,
       totalBatches: batchCount,
-      batchIds,
+      batchIdsSample,
     };
   },
 });

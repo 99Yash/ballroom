@@ -1,10 +1,10 @@
 import { youtube, youtube_v3 } from '@googleapis/youtube';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { OAuth2Client } from 'google-auth-library';
 import { db } from '~/db';
-import { account, videos } from '~/db/schemas';
+import { account } from '~/db/schemas';
 import { env } from '~/lib/env';
-import { AUTH_ERROR_TYPES, AuthenticationError } from '~/lib/errors';
+import { AUTH_ERROR_TYPES, AppError, AuthenticationError } from '~/lib/errors';
 import { logger } from '~/lib/logger';
 
 export interface YouTubeVideo {
@@ -17,9 +17,6 @@ export interface YouTubeVideo {
   publishedAt: Date;
 }
 
-/**
- * Create an authenticated YouTube client for a user
- */
 async function createYouTubeClient(userId: string) {
   const userAccount = await db
     .select()
@@ -63,8 +60,15 @@ async function createYouTubeClient(userId: string) {
   });
 
   oauth2Client.on('tokens', async (tokens) => {
-    try {
-      if (tokens.access_token) {
+    if (!tokens.access_token) {
+      return;
+    }
+
+    const maxRetries = 3;
+    let lastError: unknown;
+
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
         await db
           .update(account)
           .set({
@@ -74,23 +78,52 @@ async function createYouTubeClient(userId: string) {
               : undefined,
           })
           .where(eq(account.id, acc.id));
+
+        if (attempt > 0) {
+          logger.info('Successfully persisted refreshed token after retry', {
+            userId,
+            accountId: acc.id,
+            attempt: attempt + 1,
+          });
+        }
+        return;
+      } catch (error) {
+        lastError = error;
+
+        if (attempt === maxRetries - 1) {
+          break;
+        }
+
+        const delayMs = 100 * Math.pow(2, attempt);
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+
+        logger.warn('Failed to persist refreshed token, retrying', {
+          userId,
+          accountId: acc.id,
+          attempt: attempt + 1,
+          maxRetries,
+          delayMs,
+          error: error instanceof Error ? error.message : String(error),
+        });
       }
-    } catch (error) {
-      logger.error('Failed to persist refreshed token', error, {
+    }
+
+    logger.error(
+      'Failed to persist refreshed token after all retries',
+      lastError,
+      {
         userId,
         accountId: acc.id,
-      });
-      // Note: Consider implementing retry logic or alerting for production
-      // Throwing here would interrupt the OAuth flow, so we log instead
-    }
+        maxRetries,
+        recommendation:
+          'User may need to re-authenticate if token expires. Consider setting up monitoring for persistent failures.',
+      }
+    );
   });
 
   return youtube({ version: 'v3', auth: oauth2Client });
 }
 
-/**
- * Transform YouTube API video item to our YouTubeVideo type
- */
 function transformVideoItem(item: youtube_v3.Schema$Video) {
   const snippet = item.snippet;
   if (!snippet || !item.id) {
@@ -115,8 +148,10 @@ function transformVideoItem(item: youtube_v3.Schema$Video) {
 }
 
 /**
- * Fetch liked videos from YouTube
- * Uses the videos.list API with myRating='like' parameter (modern approach)
+ * Fetch liked videos from YouTube using the videos.list API with myRating='like'
+ *
+ * @throws {AuthenticationError} If authentication fails or tokens are invalid
+ * @throws {AppError} If API call fails due to rate limits, network errors, or invalid responses
  */
 export async function fetchLikedVideos(
   userId: string,
@@ -125,111 +160,124 @@ export async function fetchLikedVideos(
 ) {
   const yt = await createYouTubeClient(userId);
 
-  const response = await yt.videos.list({
-    myRating: 'like',
-    part: ['snippet'],
-    maxResults: Math.min(maxResults, 50),
-    pageToken,
-  });
+  try {
+    const response = await yt.videos.list({
+      myRating: 'like',
+      part: ['snippet'],
+      maxResults: Math.min(maxResults, 50),
+      pageToken,
+    });
 
-  const items = response.data.items || [];
-  const videos = items
-    .map(transformVideoItem)
-    .filter((v): v is YouTubeVideo => v !== null);
-
-  return {
-    videos,
-    nextPageToken: response.data.nextPageToken || undefined,
-    totalResults: response.data.pageInfo?.totalResults || 0,
-  };
-}
-
-/**
- * Fetch all liked videos (handles pagination)
- */
-export async function fetchAllLikedVideos(userId: string, limit?: number) {
-  const allVideos: YouTubeVideo[] = [];
-  let pageToken: string | undefined;
-
-  do {
-    const { videos: fetchedVideos, nextPageToken } = await fetchLikedVideos(
-      userId,
-      50,
-      pageToken
-    );
-    allVideos.push(...fetchedVideos);
-    pageToken = nextPageToken;
-
-    if (limit && allVideos.length >= limit) {
-      return allVideos.slice(0, limit);
+    if (!response.data) {
+      logger.error('YouTube API returned empty response', { userId });
+      throw new AppError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'YouTube API returned an invalid response',
+      });
     }
-  } while (pageToken);
 
-  return allVideos;
-}
+    const items = response.data.items || [];
+    const videos = items
+      .map((item) => {
+        const video = transformVideoItem(item);
+        if (!video) {
+          logger.warn('Failed to transform YouTube video item', {
+            userId,
+            videoId: item.id,
+            hasSnippet: !!item.snippet,
+          });
+        }
+        return video;
+      })
+      .filter((v): v is YouTubeVideo => v !== null);
 
-/**
- * Result of syncing liked videos
- */
-export interface SyncResult {
-  synced: number;
-  new: number;
-  existing: number;
-}
+    return {
+      videos,
+      nextPageToken: response.data.nextPageToken || undefined,
+      totalResults: response.data.pageInfo?.totalResults || 0,
+    };
+  } catch (error) {
+    if (error instanceof AuthenticationError) {
+      throw error;
+    }
 
-/**
- * Sync liked videos from YouTube to the database
- * This is a reusable function that can be called from API routes or background jobs
- */
-export async function syncLikedVideosForUser(userId: string, limit?: number) {
-  const likedVideos = await fetchAllLikedVideos(userId, limit);
+    if (error && typeof error === 'object' && 'code' in error) {
+      const apiError = error as { code?: number; message?: string };
 
-  if (likedVideos.length === 0) {
-    return { synced: 0, new: 0, existing: 0 };
+      if (apiError.code === 429) {
+        logger.warn('YouTube API rate limit exceeded', { userId });
+        throw new AppError({
+          code: 'TOO_MANY_REQUESTS',
+          message:
+            'YouTube API rate limit exceeded. Please wait a moment and try again.',
+          cause: error,
+        });
+      }
+
+      if (apiError.code === 401) {
+        logger.error('YouTube API authentication failed', {
+          userId,
+          code: apiError.code,
+        });
+        throw new AuthenticationError({
+          message:
+            'YouTube API authentication failed. Please re-authenticate with Google.',
+          authErrorType: AUTH_ERROR_TYPES.TOKEN_EXPIRED,
+          cause: error,
+        });
+      }
+
+      if (apiError.code === 403) {
+        if (apiError.message?.toLowerCase().includes('quota')) {
+          logger.error('YouTube API quota exceeded', { userId });
+          throw new AppError({
+            code: 'TOO_MANY_REQUESTS',
+            message:
+              'YouTube API quota exceeded. Please try again later or contact support.',
+            cause: error,
+          });
+        }
+
+        logger.error('YouTube API access forbidden', {
+          userId,
+          code: apiError.code,
+        });
+        throw new AuthenticationError({
+          message:
+            'YouTube API access forbidden. Please re-authenticate with Google.',
+          authErrorType: AUTH_ERROR_TYPES.TOKEN_EXPIRED,
+          cause: error,
+        });
+      }
+    }
+
+    if (error instanceof Error) {
+      const isNetworkError =
+        error.message.includes('ECONNRESET') ||
+        error.message.includes('ETIMEDOUT') ||
+        error.message.includes('ENOTFOUND') ||
+        error.message.includes('network') ||
+        error.message.includes('timeout');
+
+      if (isNetworkError) {
+        logger.error('Network error while fetching YouTube videos', {
+          userId,
+          error: error.message,
+        });
+        throw new AppError({
+          code: 'TIMEOUT',
+          message:
+            'Network error while fetching videos. Please check your connection and try again.',
+          cause: error,
+        });
+      }
+    }
+
+    logger.error('Unexpected error fetching YouTube videos', error, { userId });
+    throw new AppError({
+      code: 'INTERNAL_SERVER_ERROR',
+      message: 'Failed to fetch videos from YouTube. Please try again later.',
+      cause: error,
+    });
   }
-
-  const existingVideos = await db
-    .select({ youtubeId: videos.youtubeId })
-    .from(videos)
-    .where(
-      and(
-        eq(videos.userId, userId),
-        inArray(
-          videos.youtubeId,
-          likedVideos.map((v) => v.youtubeId)
-        )
-      )
-    );
-
-  const existingIds = new Set(existingVideos.map((v) => v.youtubeId));
-
-  const newVideos = likedVideos.filter((v) => !existingIds.has(v.youtubeId));
-
-  if (newVideos.length > 0) {
-    await db.insert(videos).values(
-      newVideos.map((v) => ({
-        userId,
-        youtubeId: v.youtubeId,
-        title: v.title,
-        description: v.description,
-        thumbnailUrl: v.thumbnailUrl,
-        channelName: v.channelName,
-        channelId: v.channelId,
-        publishedAt: v.publishedAt,
-      }))
-    );
-  }
-
-  logger.info('Synced liked videos', {
-    userId,
-    synced: likedVideos.length,
-    new: newVideos.length,
-    existing: existingIds.size,
-  });
-
-  return {
-    synced: likedVideos.length,
-    new: newVideos.length,
-    existing: existingIds.size,
-  };
 }

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireSession } from '~/lib/auth/session';
 import { AppError, createErrorResponse } from '~/lib/errors';
 import { logger } from '~/lib/logger';
-import { initialSyncTask } from '~/workflows/sync-videos';
+import { triggerInitialSync } from '~/workflows/sync-videos';
 
 /**
  * DEVELOPMENT ONLY: Trigger a full sync of all liked videos
@@ -102,7 +102,7 @@ export async function POST() {
       environment: process.env.NODE_ENV,
     });
 
-    const handle = await initialSyncTask.trigger({ userId });
+    const handle = await triggerInitialSync(userId);
 
     logger.api('POST', '/api/youtube/full-sync', {
       userId,

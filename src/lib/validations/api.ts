@@ -1,4 +1,5 @@
 import * as z from 'zod/v4';
+import { AppError } from '~/lib/errors';
 import { createValidationError } from '~/lib/utils';
 
 /**
@@ -24,13 +25,7 @@ export const updateCategorySchema = z.object({
 });
 
 export const syncVideosSchema = z.object({
-  limit: z
-    .number()
-    .int()
-    .positive()
-    .max(500, 'Limit cannot exceed 500')
-    .optional()
-    .default(100),
+  mode: z.enum(['quick', 'extended']).default('quick'),
 });
 
 export const categorizeVideosSchema = z.object({
@@ -49,6 +44,24 @@ export const completeOnboardingSchema = z.object({
     .min(1, 'At least one category is required')
     .max(20, 'Cannot create more than 20 categories'),
 });
+
+/**
+ * Parses JSON from a Request body.
+ * Returns an empty object for empty/whitespace-only bodies (allows optional body requests).
+ */
+export async function parseRequestBody(request: Request): Promise<unknown> {
+  try {
+    const text = await request.text();
+    if (text.trim().length === 0) return {};
+    return JSON.parse(text) as unknown;
+  } catch (parseError) {
+    throw new AppError({
+      code: 'BAD_REQUEST',
+      message: 'Invalid JSON in request body',
+      cause: parseError,
+    });
+  }
+}
 
 /**
  * Type-safe validation helper

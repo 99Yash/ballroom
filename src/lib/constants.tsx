@@ -45,4 +45,26 @@ export const APP_CONFIG = {
     batchSize: 10,
     maxRetries: 3,
   },
+  sync: {
+    progressiveMaxDepth: 10_000,
+    quickSyncLimit: 50,
+    extendedSyncLimit: 500,
+    batchSize: 50,
+    consecutiveExistingBatchesThreshold: 2,
+  },
+  quota: {
+    sync: {
+      freeLimit: 5_000,
+      paidLimit: 50_000,
+    },
+    categorize: {
+      freeLimit: 500,
+      paidLimit: 5_000,
+    },
+    resetDayOfMonth: 1,
+    warningThreshold: 80,
+  },
 } as const;
+
+export { VIDEO_SYNC_STATUS } from '~/db/schemas/videos';
+export type { VideoSyncStatus } from '~/db/schemas/videos';

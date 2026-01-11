@@ -4,15 +4,10 @@ import type { Variants } from 'motion/react';
 import { motion, useAnimation } from 'motion/react';
 import * as React from 'react';
 import { cn } from '~/lib/utils';
+import type { AnimatedIconHandle, AnimatedIconProps } from './create-animated-icon';
 
-export interface SparklesIconHandle {
-  startAnimation: () => void;
-  stopAnimation: () => void;
-}
-
-interface SparklesIconProps extends React.HTMLAttributes<HTMLDivElement> {
-  size?: number;
-}
+export type SparklesIconHandle = AnimatedIconHandle;
+export type SparklesIconProps = AnimatedIconProps;
 
 const SPARKLE_VARIANTS: Variants = {
   initial: {
@@ -25,6 +20,8 @@ const SPARKLE_VARIANTS: Variants = {
     transition: {
       duration: 1,
       bounce: 0.3,
+      repeat: Infinity,
+      repeatType: 'loop',
     },
   },
 };
@@ -43,53 +40,71 @@ const STAR_VARIANTS: Variants = {
       stiffness: 70,
       damping: 10,
       mass: 0.4,
+      repeat: Infinity,
+      repeatType: 'loop',
     },
   }),
 };
 
+/**
+ * SparklesIcon uses custom animation logic with multiple controllers,
+ * so it doesn't use the factory pattern but maintains the same interface.
+ */
 const SparklesIcon = React.forwardRef<SparklesIconHandle, SparklesIconProps>(
-  ({ onMouseEnter, onMouseLeave, className, size = 28, ...props }, ref) => {
+  (
+    { onMouseEnter, onMouseLeave, className, size = 28, animate = false, ...props },
+    ref
+  ) => {
     const starControls = useAnimation();
     const sparkleControls = useAnimation();
     const isControlledRef = React.useRef(false);
 
+    const startAnimation = React.useCallback(() => {
+      sparkleControls.start('hover');
+      starControls.start('blink', { delay: 1 });
+    }, [sparkleControls, starControls]);
+
+    const stopAnimation = React.useCallback(() => {
+      sparkleControls.start('initial');
+      starControls.start('initial');
+    }, [sparkleControls, starControls]);
+
     React.useImperativeHandle(ref, () => {
       isControlledRef.current = true;
-
       return {
-        startAnimation: () => {
-          sparkleControls.start('hover');
-          starControls.start('blink', { delay: 1 });
-        },
-        stopAnimation: () => {
-          sparkleControls.start('initial');
-          starControls.start('initial');
-        },
+        startAnimation,
+        stopAnimation,
       };
     });
 
+    React.useEffect(() => {
+      if (animate && !isControlledRef.current) {
+        startAnimation();
+      } else if (!animate && !isControlledRef.current) {
+        stopAnimation();
+      }
+    }, [animate, startAnimation, stopAnimation]);
+
     const handleMouseEnter = React.useCallback(
       (e: React.MouseEvent<HTMLDivElement>) => {
-        if (!isControlledRef.current) {
-          sparkleControls.start('hover');
-          starControls.start('blink', { delay: 1 });
-        } else {
+        if (isControlledRef.current || animate) {
           onMouseEnter?.(e);
+        } else {
+          startAnimation();
         }
       },
-      [onMouseEnter, sparkleControls, starControls]
+      [onMouseEnter, animate, startAnimation]
     );
 
     const handleMouseLeave = React.useCallback(
       (e: React.MouseEvent<HTMLDivElement>) => {
-        if (!isControlledRef.current) {
-          sparkleControls.start('initial');
-          starControls.start('initial');
-        } else {
+        if (isControlledRef.current || animate) {
           onMouseLeave?.(e);
+        } else {
+          stopAnimation();
         }
       },
-      [sparkleControls, starControls, onMouseLeave]
+      [onMouseLeave, animate, stopAnimation]
     );
 
     return (

@@ -9,6 +9,7 @@ You are an expert full-stack developer for this project. This is an early-stage 
 
 - You are fluent in TypeScript, React, Next.js App Router, and PostgreSQL
 - You understand modern React patterns (Server Components, Server Actions, hooks)
+- Use .tsx naming conventions whenever a custom hook uses React.
 - You can work with AI/LLM integrations (Google via Vercel AI SDK)
 - You write clean, type-safe code with proper error handling
 - You can debug and predict performance bottlenecks in React and PostgreSQL

@@ -2,6 +2,7 @@
 
 import { Plus, Settings2, Trash2 } from 'lucide-react';
 import * as React from 'react';
+import * as z from 'zod/v4';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import {
@@ -14,6 +15,23 @@ import { Input } from '~/components/ui/input';
 import { Modal } from '~/components/ui/modal';
 import { Spinner } from '~/components/ui/spinner';
 import type { Category } from '~/types/category';
+
+const categorySchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  isDefault: z.boolean(),
+  parentCategoryId: z.string().nullable(),
+});
+
+const createCategorySuccessSchema = z.object({
+  category: categorySchema,
+});
+
+const createCategoryErrorSchema = z.object({
+  error: z.string(),
+  reason: z.string().optional(),
+  suggestion: z.string().optional(),
+});
 
 interface CategoryManagerProps {
   categories: Category[];
@@ -47,17 +65,26 @@ export function CategoryManager({
         body: JSON.stringify({ name: newCategoryName.trim() }),
       });
 
-      const data = await response.json();
-
       if (!response.ok) {
+        const errorData = createCategoryErrorSchema.safeParse(
+          await response.json()
+        );
         throw new Error(
-          data.suggestion
-            ? `${data.error}: ${data.reason}. Try "${data.suggestion}" instead.`
-            : data.error
+          errorData.success
+            ? errorData.data.suggestion
+              ? `${errorData.data.error}${
+                  errorData.data.reason ? `: ${errorData.data.reason}` : ''
+                }. Try "${errorData.data.suggestion}" instead.`
+              : errorData.data.error
+            : 'Failed to add category'
         );
       }
 
-      onCategoryAdded?.(data.category);
+      const successData = createCategorySuccessSchema.parse(
+        await response.json()
+      );
+
+      onCategoryAdded?.(successData.category);
       onCategoriesChanged?.();
       setNewCategoryName('');
     } catch (err) {
@@ -147,12 +174,17 @@ export function CategoryManager({
               categories.map((category) => (
                 <div
                   key={category.id}
-                  className="flex items-center justify-between rounded-lg border bg-card p-3"
+                  className="flex items-center justify-between rounded-lg border bg-card p-3 gap-2"
                 >
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium">{category.name}</span>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span
+                      className="text-sm font-medium truncate"
+                      title={category.name}
+                    >
+                      {category.name}
+                    </span>
                     {category.isDefault && (
-                      <Badge variant="secondary" className="text-xs">
+                      <Badge variant="secondary" className="text-xs shrink-0">
                         Default
                       </Badge>
                     )}

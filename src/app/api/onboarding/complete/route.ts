@@ -9,7 +9,7 @@ import {
   completeOnboardingSchema,
   validateRequestBody,
 } from '~/lib/validations/api';
-import { initialSyncTask } from '~/workflows/sync-videos';
+import { triggerInitialSync } from '~/workflows/sync-videos';
 
 export async function POST(request: Request) {
   const startTime = Date.now();
@@ -73,7 +73,7 @@ export async function POST(request: Request) {
     });
 
     try {
-      await initialSyncTask.trigger({ userId: session.user.id });
+      await triggerInitialSync(session.user.id);
       logger.info('Triggered initial sync task', { userId: session.user.id });
     } catch (triggerError) {
       logger.error('Failed to trigger initial sync task', triggerError, {
