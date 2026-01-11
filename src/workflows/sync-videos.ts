@@ -69,11 +69,19 @@ function handleSyncError(
 /**
  * Initial sync task - triggered after user completes onboarding or requests full sync
  * Fetches ALL liked videos using progressive sync (no auto-categorization)
+ *
+ * Note: Per-user serialization is achieved via concurrencyKey at trigger time.
+ * The queue has concurrencyLimit: 1, and each user gets their own partition via concurrencyKey.
+ * See triggerInitialSync() helper for proper triggering.
  */
 export const initialSyncTask = schemaTask({
   id: 'initial-sync',
   schema: syncPayloadSchema,
   maxDuration: 600,
+  queue: {
+    name: 'user-sync',
+    concurrencyLimit: 1,
+  },
   retry: {
     maxAttempts: 3,
     minTimeoutInMs: 5000,
@@ -128,13 +136,18 @@ export const initialSyncTask = schemaTask({
 /**
  * Incremental sync task - called by the hourly schedule
  * Uses progressive sync with quick limits (no auto-categorization)
+ *
+ * Note: Per-user serialization is achieved via concurrencyKey at trigger time.
+ * The queue has concurrencyLimit: 1, and each user gets their own partition via concurrencyKey.
+ * See triggerIncrementalSync() and batchTriggerIncrementalSync() helpers for proper triggering.
  */
 export const incrementalSyncTask = schemaTask({
   id: 'incremental-sync',
   schema: syncPayloadSchema,
   maxDuration: 300,
   queue: {
-    concurrencyLimit: 5,
+    name: 'user-sync',
+    concurrencyLimit: 1,
   },
   retry: {
     maxAttempts: 3,
@@ -184,3 +197,38 @@ export const incrementalSyncTask = schemaTask({
     }
   },
 });
+
+/**
+ * Trigger initial sync with per-user concurrency key to prevent concurrent syncs.
+ * The concurrencyKey creates a per-user partition of the queue, ensuring
+ * only one sync runs per user at a time, preventing:
+ * - Race conditions in markVideosAsUnliked
+ * - Redundant API calls and database operations
+ *
+ * Use this instead of initialSyncTask.trigger() directly.
+ */
+export async function triggerInitialSync(userId: string) {
+  return initialSyncTask.trigger({ userId }, { concurrencyKey: userId });
+}
+
+/**
+ * Trigger incremental sync with per-user concurrency key to prevent concurrent syncs.
+ * Use this instead of incrementalSyncTask.trigger() directly.
+ */
+export async function triggerIncrementalSync(userId: string) {
+  return incrementalSyncTask.trigger({ userId }, { concurrencyKey: userId });
+}
+
+/**
+ * Batch trigger incremental syncs with per-user concurrency keys.
+ * Each user gets their own partition of the queue to prevent concurrent syncs.
+ * Use this instead of incrementalSyncTask.batchTrigger() directly.
+ */
+export async function batchTriggerIncrementalSync(userIds: string[]) {
+  return incrementalSyncTask.batchTrigger(
+    userIds.map((userId) => ({
+      payload: { userId },
+      options: { concurrencyKey: userId },
+    }))
+  );
+}

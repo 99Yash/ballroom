@@ -2,7 +2,7 @@ import { logger, metadata, schedules, tags } from '@trigger.dev/sdk';
 import { and, asc, gt, isNotNull } from 'drizzle-orm';
 import { db } from '~/db';
 import { user } from '~/db/schemas';
-import { incrementalSyncTask } from './sync-videos';
+import { batchTriggerIncrementalSync } from './sync-videos';
 
 /**
  * Batch size for processing users
@@ -86,8 +86,8 @@ export const hourlySyncSchedule = schedules.task({
         totalSoFar: totalUsersProcessed + userBatch.length,
       });
 
-      const batchHandle = await incrementalSyncTask.batchTrigger(
-        userBatch.map((u) => ({ payload: { userId: u.id } }))
+      const batchHandle = await batchTriggerIncrementalSync(
+        userBatch.map((u) => u.id)
       );
 
       totalUsersProcessed += userBatch.length;

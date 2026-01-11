@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNull, lt, or } from 'drizzle-orm';
+import { and, eq, inArray, isNull, lt, or, sql } from 'drizzle-orm';
 import { db } from '~/db';
 import { videos } from '~/db/schemas';
 import { APP_CONFIG, VIDEO_SYNC_STATUS } from './constants';
@@ -65,24 +65,9 @@ export async function progressiveSync(
       break;
     }
 
-    const youtubeIds = fetchedVideos.map((v) => v.youtubeId);
-    const existingVideos = await db
-      .select({ youtubeId: videos.youtubeId })
-      .from(videos)
-      .where(
-        and(eq(videos.userId, userId), inArray(videos.youtubeId, youtubeIds))
-      );
-
-    const existingYoutubeIds = existingVideos.map((v) => v.youtubeId);
-    const existingIds = new Set(existingYoutubeIds);
-    const newVideos = fetchedVideos.filter(
-      (v) => !existingIds.has(v.youtubeId)
-    );
-
     const insertedCount = await syncBatchToDatabase({
       userId,
-      existingYoutubeIds,
-      newVideos,
+      fetchedVideos,
       shouldCheckQuota: opts.checkQuota,
       syncStartedAt,
     });
@@ -145,60 +130,48 @@ export async function progressiveSync(
 
 async function syncBatchToDatabase({
   userId,
-  existingYoutubeIds,
-  newVideos,
+  fetchedVideos,
   shouldCheckQuota,
   syncStartedAt,
 }: {
   userId: string;
-  existingYoutubeIds: string[];
-  newVideos: YouTubeVideo[];
+  fetchedVideos: YouTubeVideo[];
   shouldCheckQuota: boolean;
   syncStartedAt: Date;
 }): Promise<number> {
-  if (existingYoutubeIds.length === 0 && newVideos.length === 0) return 0;
+  if (fetchedVideos.length === 0) return 0;
+  const youtubeIds = fetchedVideos.map((v) => v.youtubeId);
 
   return db.transaction(async (tx) => {
-    const insertResult =
-      newVideos.length === 0
-        ? null
-        : await tx
-            .insert(videos)
-            .values(
-              newVideos.map((v) => ({
-                userId,
-                youtubeId: v.youtubeId,
-                title: v.title,
-                description: v.description,
-                thumbnailUrl: v.thumbnailUrl,
-                channelName: v.channelName,
-                channelId: v.channelId,
-                publishedAt: v.publishedAt,
-                syncStatus: VIDEO_SYNC_STATUS.ACTIVE,
-                lastSeenAt: syncStartedAt,
-              }))
-            )
-            .onConflictDoNothing({
-              target: [videos.userId, videos.youtubeId],
-            });
+    const insertResult = await tx
+      .insert(videos)
+      .values(
+        fetchedVideos.map((v) => ({
+          userId,
+          youtubeId: v.youtubeId,
+          title: v.title,
+          description: v.description,
+          thumbnailUrl: v.thumbnailUrl,
+          channelName: v.channelName,
+          channelId: v.channelId,
+          publishedAt: v.publishedAt,
+          syncStatus: VIDEO_SYNC_STATUS.ACTIVE,
+          lastSeenAt: syncStartedAt,
+        }))
+      )
+      .onConflictDoNothing({
+        target: [videos.userId, videos.youtubeId],
+      });
 
     const insertedCount = insertResult?.rowCount ?? 0;
 
-    // Only update existing videos (newly inserted ones already have correct values)
-    if (existingYoutubeIds.length > 0) {
-      await tx
-        .update(videos)
-        .set({
-          lastSeenAt: syncStartedAt,
-          syncStatus: VIDEO_SYNC_STATUS.ACTIVE,
-        })
-        .where(
-          and(
-            eq(videos.userId, userId),
-            inArray(videos.youtubeId, existingYoutubeIds)
-          )
-        );
-    }
+    await tx
+      .update(videos)
+      .set({
+        lastSeenAt: sql`COALESCE(GREATEST(${videos.lastSeenAt}, ${syncStartedAt}), ${syncStartedAt})`,
+        syncStatus: VIDEO_SYNC_STATUS.ACTIVE,
+      })
+      .where(and(eq(videos.userId, userId), inArray(videos.youtubeId, youtubeIds)));
 
     if (insertedCount > 0) {
       if (shouldCheckQuota) {

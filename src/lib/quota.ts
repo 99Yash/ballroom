@@ -293,6 +293,105 @@ export async function incrementQuotaWithinTx(
   });
 }
 
+/**
+ * Reserve quota atomically BEFORE expensive operations (e.g., AI API calls).
+ * This prevents concurrent requests from both passing optimistic checks and
+ * wasting resources on operations that will fail at commit time.
+ *
+ * Uses row-level locking to ensure only one request can reserve quota at a time.
+ * If the quota would be exceeded, throws QUOTA_EXCEEDED immediately.
+ *
+ * @returns The amount reserved (for logging/tracking)
+ */
+export async function reserveQuota(
+  userId: string,
+  quotaType: QuotaType,
+  amount: number
+): Promise<{ reserved: number; newUsed: number; limit: number }> {
+  if (amount < 0) {
+    throw new AppError({
+      code: 'BAD_REQUEST',
+      message: `Invalid quota amount: ${amount}. Amount must be non-negative.`,
+    });
+  }
+  if (amount === 0) {
+    const quotas = await getUserQuotas(userId);
+    const quota = quotaType === 'sync' ? quotas.sync : quotas.categorize;
+    return { reserved: 0, newUsed: quota.used, limit: quota.limit };
+  }
+
+  return db.transaction(async (tx) => {
+    const nextResetDate = getNextQuotaResetDate();
+    await tx
+      .update(user)
+      .set(buildQuotaResetValues(nextResetDate))
+      .where(buildQuotaResetNeededCondition(userId));
+
+    const update = await tx
+      .update(user)
+      .set(buildQuotaIncrementUpdate(quotaType, amount))
+      .where(
+        and(
+          eq(user.id, userId),
+          buildQuotaLimitCheckCondition(quotaType, amount)
+        )
+      )
+      .returning({
+        syncQuotaUsed: user.syncQuotaUsed,
+        syncQuotaLimit: user.syncQuotaLimit,
+        categorizeQuotaUsed: user.categorizeQuotaUsed,
+        categorizeQuotaLimit: user.categorizeQuotaLimit,
+      });
+
+    if (update.length === 1) {
+      const { used, limit } = getQuotaValues(update[0]!, quotaType);
+      logger.debug('Quota reserved successfully', {
+        userId,
+        quotaType,
+        amount,
+        newUsed: used,
+        limit,
+      });
+      return { reserved: amount, newUsed: used, limit };
+    }
+
+    const [current] = await tx
+      .select({
+        syncQuotaUsed: user.syncQuotaUsed,
+        syncQuotaLimit: user.syncQuotaLimit,
+        categorizeQuotaUsed: user.categorizeQuotaUsed,
+        categorizeQuotaLimit: user.categorizeQuotaLimit,
+      })
+      .from(user)
+      .where(eq(user.id, userId))
+      .limit(1);
+
+    if (!current) {
+      throw new AppError({
+        code: 'NOT_FOUND',
+        message: `User not found: ${userId}`,
+      });
+    }
+
+    const { used, limit } = getQuotaValues(current, quotaType);
+
+    logger.debug('Quota reservation failed - limit exceeded', {
+      userId,
+      quotaType,
+      requestedAmount: amount,
+      currentUsed: used,
+      limit,
+    });
+
+    throw new AppError({
+      code: 'QUOTA_EXCEEDED',
+      message: `${getQuotaTypeDisplayName(
+        quotaType
+      )} quota exceeded. Used: ${used}/${limit}. Resets monthly.`,
+    });
+  });
+}
+
 export function formatQuotaForClient(quotas: UserQuotas): ClientQuotaState {
   return {
     sync: {

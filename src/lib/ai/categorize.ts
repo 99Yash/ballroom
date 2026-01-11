@@ -7,7 +7,7 @@ import { categories, videos } from '~/db/schemas';
 import { VIDEO_SYNC_STATUS } from '~/lib/constants';
 import { AppError } from '~/lib/errors';
 import { logger } from '~/lib/logger';
-import { checkAndIncrementQuotaWithinTx, getUserQuotas } from '~/lib/quota';
+import { reserveQuota } from '~/lib/quota';
 
 interface VideoForCategorization {
   id: string;
@@ -25,6 +25,36 @@ interface CategorizationResult {
   videoId: string;
   categoryId: string;
 }
+
+interface CategorizationWithReasoning extends CategorizationResult {
+  contentType: 'entertainment' | 'educational' | 'music' | 'news' | 'other';
+  reasoning: string;
+}
+
+const contentTypeEnum = z.enum([
+  'entertainment',
+  'educational',
+  'music',
+  'news',
+  'other',
+]);
+
+const categorizationSchema = z.object({
+  categorizations: z.array(
+    z.object({
+      videoId: z.string(),
+      contentType: contentTypeEnum.describe(
+        'The primary content type/format of this video'
+      ),
+      reasoning: z
+        .string()
+        .describe(
+          'Brief explanation of why this category was chosen over others'
+        ),
+      categoryId: z.string().describe('The final category ID assignment'),
+    })
+  ),
+});
 
 /**
  * Retry a function with exponential backoff
@@ -136,25 +166,27 @@ Return whether it's valid, and if not, explain why and suggest an alternative if
 }
 
 /**
- * Categorize a batch of videos into the provided categories
+ * Categorize a batch of videos into the provided categories.
+ * Uses chain-of-thought reasoning to improve accuracy by having the AI
+ * first identify content type before assigning a category.
  */
 export async function categorizeVideos(
-  videos: VideoForCategorization[],
-  categories: Category[]
-) {
-  if (videos.length === 0 || categories.length === 0) {
+  videosToCateg: VideoForCategorization[],
+  categoriesToUse: Category[]
+): Promise<CategorizationResult[]> {
+  if (videosToCateg.length === 0 || categoriesToUse.length === 0) {
     return [];
   }
 
-  const otherCategory = categories.find(
+  const otherCategory = categoriesToUse.find(
     (c) => c.name.toLowerCase() === 'other'
   );
 
-  const categoryList = categories
+  const categoryList = categoriesToUse
     .map((c) => `- "${c.name}" (ID: ${c.id})`)
     .join('\n');
 
-  const videoList = videos
+  const videoList = videosToCateg
     .map(
       (v) =>
         `- Video ID: ${v.id}
@@ -168,16 +200,7 @@ export async function categorizeVideos(
     () =>
       generateObject({
         model: google('gemini-2.5-flash-lite'),
-        schema: z.object({
-          categorizations: z.array(
-            z.object({
-              videoId: z.string().describe('The video ID from the input'),
-              categoryId: z
-                .string()
-                .describe('The category ID that best fits this video'),
-            })
-          ),
-        }),
+        schema: categorizationSchema,
         prompt: `You are categorizing YouTube videos into user-defined categories.
 
 CATEGORIES:
@@ -186,24 +209,78 @@ ${categoryList}
 VIDEOS TO CATEGORIZE:
 ${videoList}
 
-For each video, determine the most appropriate category based on:
-1. The video title
-2. The channel name
-3. The video description (if available)
+## Categorization Process
 
-Rules:
+For each video, follow this reasoning process:
+
+1. **First, identify the content type** (entertainment, educational, music, news, other)
+   - entertainment: Comedy, vlogs, reaction videos, podcasts, gaming, talk shows
+   - educational: Tutorials, how-to guides, lectures, documentaries, explainers
+   - music: Music videos, live performances, album reviews, artist content
+   - news: Current events, journalism, updates, announcements
+   - other: Doesn't fit the above
+
+2. **Then, consider what category fits best** based on these rules:
+
+**CRITICAL: Content TYPE trumps topic MENTIONED**
+
+Categories can represent either:
+- **Content format/type** (Comedy, Entertainment, Music, Podcast, Gaming) - WHAT KIND of content
+- **Subject/niche** (Fitness, Tech, Cooking, Finance) - WHAT TOPIC it covers
+
+**Priority hierarchy:**
+
+1. **Creator/Channel type** - Is this channel primarily known for comedy, music, gaming, etc.?
+   - Comedians (Bill Burr, Dave Chappelle, Joe Rogan clips, etc.) → Comedy/Entertainment
+   - Musicians, music channels → Music
+   - Gaming streamers/YouTubers → Gaming
+   - Podcasts → Podcast/Entertainment
+
+2. **Primary purpose** - What is the viewer supposed to get from this?
+   - Laughing/entertainment → Comedy/Entertainment
+   - Learning how to do something → Education or the topic category
+   - Background listening/watching → Music, Podcast, Entertainment
+
+3. **Topic mentioned** - Only use topic categories when:
+   - The video is instructional/educational about that topic
+   - The channel specializes in that topic
+   - The primary purpose is to inform/teach about that topic
+
+**Examples:**
+- Bill Burr rant about the gym → contentType: "entertainment", category: Comedy (NOT Fitness)
+- AthleanX workout tutorial → contentType: "educational", category: Fitness
+- Joe Rogan discussing nutrition → contentType: "entertainment", category: Entertainment/Podcast
+- MKBHD phone review → contentType: "educational", category: Tech
+- Music video → contentType: "music", category: Music
+- Gaming streamer cooking in a game → contentType: "entertainment", category: Gaming
+
+**Rules:**
 - Every video MUST be assigned to exactly one category
 - Use the category ID (not name) in your response
-- If a video doesn't clearly fit any category, use the "Other" category${
-          otherCategory ? ` (ID: ${otherCategory.id})` : ''
-        }
+- Provide brief reasoning explaining your choice
+- If nothing fits well, use "Other"${otherCategory ? ` (ID: ${otherCategory.id})` : ''}
 
-Return a categorization for EVERY video in the input.`,
+Return a categorization for EVERY video.`,
       }),
     { maxRetries: 3 }
   );
 
-  return result.object.categorizations;
+  const categorizations = result.object
+    .categorizations as CategorizationWithReasoning[];
+
+  logger.debug('AI categorization reasoning', {
+    count: categorizations.length,
+    sample: categorizations.slice(0, 3).map((c) => ({
+      videoId: c.videoId,
+      contentType: c.contentType,
+      reasoning: c.reasoning,
+    })),
+  });
+
+  return categorizations.map(({ videoId, categoryId }) => ({
+    videoId,
+    categoryId,
+  }));
 }
 
 /**
@@ -309,22 +386,22 @@ export async function categorizeUserVideos(
     return { categorized: 0, total: 0, skipped: 0 };
   }
 
-  // Check quota upfront before expensive AI work
-  const quotas = await getUserQuotas(userId);
-  if (quotas.categorize.isExceeded) {
-    const daysUntilReset = quotas.categorize.resetAt
-      ? Math.ceil(
-          (quotas.categorize.resetAt.getTime() - Date.now()) /
-            (1000 * 60 * 60 * 24)
-        )
-      : 0;
-    const safeDaysUntilReset = Math.max(0, daysUntilReset);
+  // Reserve quota atomically BEFORE expensive AI work.
+  // This prevents concurrent requests from both passing optimistic checks
+  // and wasting AI API calls on operations that would fail at commit time.
+  // Once reserved, quota is consumed regardless of AI success (fair since API is called).
+  const reservation = await reserveQuota(
+    userId,
+    'categorize',
+    videosToAnalyze.length
+  );
 
-    throw new AppError({
-      code: 'QUOTA_EXCEEDED',
-      message: `Categorization quota exceeded. Used: ${quotas.categorize.used}/${quotas.categorize.limit}. Resets in ${safeDaysUntilReset} days.`,
-    });
-  }
+  logger.debug('Quota reserved for categorization', {
+    userId,
+    videosToAnalyze: videosToAnalyze.length,
+    newUsed: reservation.newUsed,
+    limit: reservation.limit,
+  });
 
   if (force) {
     logger.info('Force re-categorization requested', {
@@ -443,21 +520,13 @@ export async function categorizeUserVideos(
 
     await Promise.all(updatePromises);
 
-    const categorizedCountInTx = Array.from(updatesByCategory.values()).reduce(
+    categorizedCount = Array.from(updatesByCategory.values()).reduce(
       (sum, videoIds) => sum + videoIds.length,
       0
     );
 
-    if (categorizedCountInTx > 0) {
-      await checkAndIncrementQuotaWithinTx(
-        tx,
-        userId,
-        'categorize',
-        categorizedCountInTx
-      );
-    }
-
-    categorizedCount = categorizedCountInTx;
+    // Note: Quota was already reserved before AI work started.
+    // No additional quota increment needed here.
   });
 
   logger.info('Categorized user videos', {
