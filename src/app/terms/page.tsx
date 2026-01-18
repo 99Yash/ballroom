@@ -3,18 +3,13 @@ import { siteConfig } from '~/lib/site';
 
 export default function TermsPage() {
   const effectiveDate = 'January 17, 2026';
-  const listClassName =
-    'list-disc pl-5 pt-3.5 space-y-1 text-foreground/70 font-medium text-[13.5px]';
-  const listItemClassName = 'leading-relaxed tracking-tight';
-  const bodyClassName =
-    'space-y-6 text-sm text-foreground/80 [&_p]:leading-relaxed [&_p]:tracking-tight [&_h2]:text-foreground [&_h2]:text-base [&_h2]:font-medium [&_h2]:tracking-tight [&_a]:underline [&_a]:underline-offset-4 [&_a]:decoration-foreground/20 [&_a]:transition-all [&_a:hover]:decoration-foreground-muted';
 
   return (
     <div className="container mx-auto max-w-2xl px-4 py-16">
       <h1 className="mb-6 text-2xl font-semibold tracking-tight text-foreground">
         {siteConfig.name} Terms of Service
       </h1>
-      <div className={bodyClassName}>
+      <div className="space-y-6 text-sm text-foreground/80 [&_p]:leading-relaxed [&_p]:tracking-tight [&_h2]:text-foreground [&_h2]:text-base [&_h2]:font-medium [&_h2]:tracking-tight [&_a]:underline [&_a]:underline-offset-4 [&_a]:decoration-foreground/20 [&_a]:transition-all [&_a:hover]:decoration-foreground-muted">
         <p className="text-foreground/60 text-xs italic tracking-tight">
           Effective date: {effectiveDate}
         </p>
@@ -31,15 +26,15 @@ export default function TermsPage() {
         </p>
 
         <h2>Accounts and access</h2>
-        <ul className={listClassName}>
-          <li className={listItemClassName}>
+        <ul className="list-disc pl-5 pt-3.5 space-y-1 text-foreground/70 font-medium text-[13.5px]">
+          <li className="leading-relaxed tracking-tight">
             You must sign in with Google to use the service.
           </li>
-          <li className={listItemClassName}>
+          <li className="leading-relaxed tracking-tight">
             You are responsible for maintaining the security of your Google
             account.
           </li>
-          <li className={listItemClassName}>
+          <li className="leading-relaxed tracking-tight">
             Do not use the service for unlawful or abusive purposes.
           </li>
         </ul>

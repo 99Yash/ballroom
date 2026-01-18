@@ -3,18 +3,13 @@ import { siteConfig } from '~/lib/site';
 
 export default function PrivacyPage() {
   const effectiveDate = 'January 17, 2026';
-  const listClassName =
-    'list-disc pl-5 pt-3.5 space-y-1 text-foreground/70 font-medium text-[13.5px]';
-  const listItemClassName = 'leading-relaxed tracking-tight';
-  const bodyClassName =
-    'space-y-6 text-sm text-foreground/80 [&_p]:leading-relaxed [&_p]:tracking-tight [&_h2]:text-foreground [&_h2]:text-base [&_h2]:font-medium [&_h2]:tracking-tight [&_a]:underline [&_a]:underline-offset-4 [&_a]:decoration-foreground/20 [&_a]:transition-all [&_a:hover]:decoration-foreground-muted';
 
   return (
     <div className="container mx-auto max-w-2xl px-4 py-16">
       <h1 className="mb-6 text-2xl font-semibold tracking-tight text-foreground">
         {siteConfig.name} Privacy Policy
       </h1>
-      <div className={bodyClassName}>
+      <div className="space-y-6 text-sm text-foreground/80 [&_p]:leading-relaxed [&_p]:tracking-tight [&_h2]:text-foreground [&_h2]:text-base [&_h2]:font-medium [&_h2]:tracking-tight [&_a]:underline [&_a]:underline-offset-4 [&_a]:decoration-foreground/20 [&_a]:transition-all [&_a:hover]:decoration-foreground-muted">
         <p className="text-foreground/60 text-xs italic tracking-tight">
           Effective date: {effectiveDate}
         </p>
@@ -25,33 +20,33 @@ export default function PrivacyPage() {
         </p>
 
         <h2>Information we collect</h2>
-        <ul className={listClassName}>
-          <li className={listItemClassName}>
+        <ul className="list-disc pl-5 pt-3.5 space-y-1 text-foreground/70 font-medium text-[13.5px]">
+          <li className="leading-relaxed tracking-tight">
             Google account details such as your name, email address, and profile
             image.
           </li>
-          <li className={listItemClassName}>
+          <li className="leading-relaxed tracking-tight">
             YouTube liked videos metadata such as video title, description,
             channel name, and publish date.
           </li>
-          <li className={listItemClassName}>
+          <li className="leading-relaxed tracking-tight">
             OAuth tokens from Google that allow us to access the YouTube API on
             your behalf.
           </li>
-          <li className={listItemClassName}>
+          <li className="leading-relaxed tracking-tight">
             App usage data like sync/categorization counts and timestamps.
           </li>
         </ul>
 
         <h2>How we use your information</h2>
-        <ul className={listClassName}>
-          <li className={listItemClassName}>
+        <ul className="list-disc pl-5 pt-3.5 space-y-1 text-foreground/70 font-medium text-[13.5px]">
+          <li className="leading-relaxed tracking-tight">
             Provide the core service (sync, search, and categorization).
           </li>
-          <li className={listItemClassName}>
+          <li className="leading-relaxed tracking-tight">
             Improve organization accuracy and app experience.
           </li>
-          <li className={listItemClassName}>
+          <li className="leading-relaxed tracking-tight">
             Maintain security, prevent abuse, and troubleshoot issues.
           </li>
         </ul>
@@ -87,11 +82,11 @@ export default function PrivacyPage() {
         </p>
 
         <h2>Your choices</h2>
-        <ul className={listClassName}>
-          <li className={listItemClassName}>
+        <ul className="list-disc pl-5 pt-3.5 space-y-1 text-foreground/70 font-medium text-[13.5px]">
+          <li className="leading-relaxed tracking-tight">
             Disconnect access by revoking the app in your Google account.
           </li>
-          <li className={listItemClassName}>
+          <li className="leading-relaxed tracking-tight">
             Request access or deletion by contacting us.
           </li>
         </ul>
