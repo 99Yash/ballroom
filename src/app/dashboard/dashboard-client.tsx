@@ -4,6 +4,7 @@ import {
   ChevronLeft,
   ChevronRight,
   FolderOpen,
+  Link,
   LogOut,
   Search,
   Twitter,
@@ -16,6 +17,7 @@ import { parseAsInteger, parseAsString, useQueryState } from 'nuqs';
 import * as React from 'react';
 import { toast } from 'sonner';
 import { CategoryManager } from '~/components/category-manager';
+import { ConnectedAccounts } from '~/components/connected-accounts';
 import { ContentCard } from '~/components/content-card';
 import { QuotaDisplay } from '~/components/quota-display';
 import { SyncButton } from '~/components/sync-button';
@@ -30,6 +32,7 @@ import type { SerializedContentItem } from '~/types/content';
 interface DashboardClientProps {
   initialCategories: Category[];
   userName: string;
+  userEmail: string;
 }
 
 const pageParser = parseAsInteger.withDefault(1).withOptions({
@@ -56,8 +59,10 @@ const SOURCE_FILTERS: Array<{
 export function DashboardClient({
   initialCategories,
   userName,
+  userEmail,
 }: DashboardClientProps) {
   const router = useRouter();
+  const [accountsOpen, setAccountsOpen] = React.useState(false);
   const [items, setItems] = React.useState<SerializedContentItem[]>([]);
   const [categories, setCategories] =
     React.useState<Category[]>(initialCategories);
@@ -337,6 +342,14 @@ export function DashboardClient({
             className="flex items-center gap-3"
           >
             <QuotaDisplay />
+            <Button
+              variant="ghost"
+              onClick={() => setAccountsOpen(true)}
+              className="gap-2 transition-colors hover:bg-muted/50"
+            >
+              <Link className="h-4 w-4" />
+              <span className="hidden sm:inline">Accounts</span>
+            </Button>
             <Button
               variant="ghost"
               onClick={handleSignOut}
@@ -653,6 +666,12 @@ export function DashboardClient({
           </motion.div>
         )}
       </main>
+
+      <ConnectedAccounts
+        open={accountsOpen}
+        onOpenChange={setAccountsOpen}
+        userEmail={userEmail}
+      />
     </div>
   );
 }

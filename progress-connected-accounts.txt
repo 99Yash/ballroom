@@ -4,3 +4,11 @@ WS1 - X availability flag and account status API [DONE]
     - src/app/api/accounts/route.ts (GET: returns linked accounts + xConfigured flag)
     - src/hooks/use-connected-accounts.tsx (useConnectedAccounts hook with hasX, xConfigured, refetch)
   Outcome: tsc --noEmit passes. Client can determine X availability and linked account status.
+
+WS2 - Connected accounts UI [DONE]
+  Files created:
+    - src/components/connected-accounts.tsx (Sheet with Google row, X connect/disconnect, AlertDialog confirmation)
+  Files changed:
+    - src/app/dashboard/dashboard-client.tsx (added "Accounts" button in header, ConnectedAccounts sheet, userEmail prop)
+    - src/app/dashboard/page.tsx (passes userEmail to DashboardClient)
+  Outcome: tsc --noEmit passes. Users can open connected-accounts sheet, link X via OAuth, and disconnect with confirmation.

@@ -49,14 +49,14 @@ Give users a way to link and unlink their X account, and make the sync UI aware 
 - ~~Client can determine: (a) is X configured on this instance, (b) does the current user have an X account linked.~~
 - ~~When `X_CLIENT_ID` is absent, X-related UI is hidden entirely.~~
 
-### WS2 - Connected accounts UI
+### ~~WS2 - Connected accounts UI~~ ✅
 
 #### Deliverables
 
-- Connected accounts sheet/dialog accessible from the dashboard header (e.g., user menu or a settings icon).
-- Lists all linked providers with status: Google (primary, non-removable), X (connect/disconnect).
-- Connect X triggers `authClient.linkSocial({ provider: 'twitter', callbackURL: '/dashboard' })`.
-- Disconnect X triggers account unlinking and refreshes the account list.
+- ~~Connected accounts sheet/dialog accessible from the dashboard header (e.g., user menu or a settings icon).~~
+- ~~Lists all linked providers with status: Google (primary, non-removable), X (connect/disconnect).~~
+- ~~Connect X triggers `authClient.linkSocial({ provider: 'twitter', callbackURL: '/dashboard' })`.~~
+- ~~Disconnect X triggers account unlinking and refreshes the account list.~~
 
 #### Proposed modules
 
@@ -65,17 +65,17 @@ Give users a way to link and unlink their X account, and make the sync UI aware 
 
 #### UI spec
 
-- **Google row**: Google icon, user email, "Primary" badge, no disconnect action.
-- **X row (not linked)**: X/Twitter icon, "Not connected" label, "Connect" button.
-- **X row (linked)**: X/Twitter icon, `@username` label, "Disconnect" button with confirmation.
-- **X row (not configured)**: Hidden entirely (env vars absent).
+- ~~**Google row**: Google icon, user email, "Primary" badge, no disconnect action.~~
+- ~~**X row (not linked)**: X/Twitter icon, "Not connected" label, "Connect" button.~~
+- ~~**X row (linked)**: X/Twitter icon, `@username` label, "Disconnect" button with confirmation.~~
+- ~~**X row (not configured)**: Hidden entirely (env vars absent).~~
 
 #### Acceptance criteria
 
-- User can open the connected accounts sheet from the dashboard.
-- Clicking "Connect" initiates X OAuth and returns to the dashboard with the account linked.
-- Clicking "Disconnect" removes the X account row after confirmation.
-- Google account is always shown and cannot be disconnected.
+- ~~User can open the connected accounts sheet from the dashboard.~~
+- ~~Clicking "Connect" initiates X OAuth and returns to the dashboard with the account linked.~~
+- ~~Clicking "Disconnect" removes the X account row after confirmation.~~
+- ~~Google account is always shown and cannot be disconnected.~~
 
 ### WS3 - Sync dropdown connect-awareness
 
