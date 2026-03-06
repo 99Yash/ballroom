@@ -77,25 +77,25 @@ Give users a way to link and unlink their X account, and make the sync UI aware 
 - ~~Clicking "Disconnect" removes the X account row after confirmation.~~
 - ~~Google account is always shown and cannot be disconnected.~~
 
-### WS3 - Sync dropdown connect-awareness
+### ~~WS3 - Sync dropdown connect-awareness~~ ✅
 
 #### Deliverables
 
-- The sync dropdown's X section adapts based on whether X is linked.
-- When X is not linked: X section shows a "Connect X to sync" item that opens the connected accounts sheet (or directly triggers OAuth).
-- When X is linked: existing behavior (Bookmarks / Likes sync actions).
-- When X is not configured (env vars absent): X section is hidden entirely.
+- ~~The sync dropdown's X section adapts based on whether X is linked.~~
+- ~~When X is not linked: X section shows a "Connect X to sync" item that opens the connected accounts sheet (or directly triggers OAuth).~~
+- ~~When X is linked: existing behavior (Bookmarks / Likes sync actions).~~
+- ~~When X is not configured (env vars absent): X section is hidden entirely.~~
 
 #### Proposed changes
 
-- `src/components/sync-button.tsx` - accept connected-accounts state as a prop or use the hook from WS1.
-- Conditionally render X menu items based on account status.
+- ~~`src/components/sync-button.tsx` - accept connected-accounts state as a prop or use the hook from WS1.~~
+- ~~Conditionally render X menu items based on account status.~~
 
 #### Acceptance criteria
 
-- User with no X account linked sees a helpful prompt instead of sync actions that would fail.
-- User with X linked sees the existing sync actions unchanged.
-- Instance without X configured shows no X-related UI anywhere.
+- ~~User with no X account linked sees a helpful prompt instead of sync actions that would fail.~~
+- ~~User with X linked sees the existing sync actions unchanged.~~
+- ~~Instance without X configured shows no X-related UI anywhere.~~
 
 ### WS4 - Error handling and edge cases
 

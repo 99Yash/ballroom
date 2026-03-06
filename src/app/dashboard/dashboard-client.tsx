@@ -372,6 +372,7 @@ export function DashboardClient({
           <SyncButton
             onSyncComplete={handleRefresh}
             onCategorizeComplete={handleRefresh}
+            onConnectX={() => setAccountsOpen(true)}
           />
           <CategoryManager
             categories={categories}

@@ -6,6 +6,7 @@ import {
   Clock,
   FastForward,
   Heart,
+  Link,
   RotateCcw,
   Twitter,
   Youtube,
@@ -32,6 +33,7 @@ import {
   TooltipTrigger,
 } from '~/components/ui/tooltip';
 import { isQuotaExceeded, isQuotaLow, useQuota } from '~/hooks/use-quota';
+import { useConnectedAccounts } from '~/hooks/use-connected-accounts';
 import { clientQuotaStateSchema } from '~/lib/quota-client';
 import type { CollectionType, ContentSource } from '~/lib/sources/types';
 import { cn, formatTimeToNow } from '~/lib/utils';
@@ -39,6 +41,7 @@ import { cn, formatTimeToNow } from '~/lib/utils';
 interface SyncButtonProps {
   onSyncComplete?: (result: { synced: number; new: number }) => void;
   onCategorizeComplete?: (result: { categorized: number }) => void;
+  onConnectX?: () => void;
 }
 
 interface SyncStatus {
@@ -88,12 +91,14 @@ const SOURCE_LABELS: Record<ContentSource, string> = {
 export function SyncButton({
   onSyncComplete,
   onCategorizeComplete,
+  onConnectX,
 }: SyncButtonProps) {
   const [isSyncing, setIsSyncing] = React.useState(false);
   const [isCategorizing, setIsCategorizing] = React.useState(false);
   const [status, setStatus] = React.useState<string | null>(null);
   const [syncStatus, setSyncStatus] = React.useState<SyncStatus | null>(null);
   const { quota, refetch: refetchQuota } = useQuota();
+  const { xConfigured, hasX } = useConnectedAccounts();
 
   const fetchSyncStatus = React.useCallback(async () => {
     try {
@@ -343,34 +348,52 @@ export function SyncButton({
                 </DropdownMenuItem>
               )}
 
-              <DropdownMenuSeparator />
-              <DropdownMenuLabel className="flex items-center gap-1.5 text-xs">
-                <Twitter className="h-3.5 w-3.5" />X
-              </DropdownMenuLabel>
-              <DropdownMenuItem
-                onClick={() => handleSourceSync('x', 'bookmarks', 'quick')}
-                disabled={isLoading}
-              >
-                <Bookmark className="mr-2 h-4 w-4" />
-                <div>
-                  <div className="font-medium">Bookmarks</div>
-                  <div className="text-xs text-muted-foreground">
-                    Sync X bookmarks
-                  </div>
-                </div>
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => handleSourceSync('x', 'likes', 'quick')}
-                disabled={isLoading}
-              >
-                <Heart className="mr-2 h-4 w-4" />
-                <div>
-                  <div className="font-medium">Likes</div>
-                  <div className="text-xs text-muted-foreground">
-                    Sync X likes
-                  </div>
-                </div>
-              </DropdownMenuItem>
+              {xConfigured && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel className="flex items-center gap-1.5 text-xs">
+                    <Twitter className="h-3.5 w-3.5" />X
+                  </DropdownMenuLabel>
+                  {hasX ? (
+                    <>
+                      <DropdownMenuItem
+                        onClick={() => handleSourceSync('x', 'bookmarks', 'quick')}
+                        disabled={isLoading}
+                      >
+                        <Bookmark className="mr-2 h-4 w-4" />
+                        <div>
+                          <div className="font-medium">Bookmarks</div>
+                          <div className="text-xs text-muted-foreground">
+                            Sync X bookmarks
+                          </div>
+                        </div>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => handleSourceSync('x', 'likes', 'quick')}
+                        disabled={isLoading}
+                      >
+                        <Heart className="mr-2 h-4 w-4" />
+                        <div>
+                          <div className="font-medium">Likes</div>
+                          <div className="text-xs text-muted-foreground">
+                            Sync X likes
+                          </div>
+                        </div>
+                      </DropdownMenuItem>
+                    </>
+                  ) : (
+                    <DropdownMenuItem onClick={onConnectX}>
+                      <Link className="mr-2 h-4 w-4" />
+                      <div>
+                        <div className="font-medium">Connect X to sync</div>
+                        <div className="text-xs text-muted-foreground">
+                          Link your X account first
+                        </div>
+                      </div>
+                    </DropdownMenuItem>
+                  )}
+                </>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>

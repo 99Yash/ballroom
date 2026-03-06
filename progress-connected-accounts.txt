@@ -12,3 +12,9 @@ WS2 - Connected accounts UI [DONE]
     - src/app/dashboard/dashboard-client.tsx (added "Accounts" button in header, ConnectedAccounts sheet, userEmail prop)
     - src/app/dashboard/page.tsx (passes userEmail to DashboardClient)
   Outcome: tsc --noEmit passes. Users can open connected-accounts sheet, link X via OAuth, and disconnect with confirmation.
+
+WS3 - Sync dropdown connect-awareness [DONE]
+  Files changed:
+    - src/components/sync-button.tsx (uses useConnectedAccounts hook; X section hidden when not configured, shows "Connect X to sync" when not linked, shows sync actions when linked; accepts onConnectX callback)
+    - src/app/dashboard/dashboard-client.tsx (passes onConnectX={() => setAccountsOpen(true)} to SyncButton)
+  Outcome: tsc --noEmit passes. Sync dropdown adapts to X connection state.
