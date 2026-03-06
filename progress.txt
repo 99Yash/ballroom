@@ -63,3 +63,18 @@ WS6 - Workflows, quotas, and cost controls: DONE
     - src/workflows/sync-videos.ts (source-aware payloads: schema accepts source/collection with youtube/likes defaults, concurrency key format userId:source:collection, tasks call runSync directly instead of legacy wrappers, trigger helpers accept source/collection params, batchTriggerIncrementalSync accepts SyncItem[] instead of string[], TOO_MANY_REQUESTS errors abort without retry)
     - src/workflows/scheduled-sync.ts (multi-source scheduled sync: buildSyncItemsForUsers queries account table to find connected providers per user, maps google→youtube/likes and twitter→x/likes+x/bookmarks, only triggers syncs for sources user has actually connected, tracks totalSyncItems metric)
   Outcome: tsc --noEmit passes cleanly. Workflow tasks are source-aware with userId:source:collection concurrency keys preventing race conditions per source/collection. Per-source cost controls enforce tighter limits for X (2k max items vs 10k YouTube, 15min vs 5min full-sync cooldown). Quota enforcement remains atomic (unchanged checkAndIncrementQuotaWithinTx). Scheduled sync only triggers for connected providers.
+
+WS7 - Testing, observability, and rollout: DONE
+  Files created:
+    - vitest.config.ts (Vitest config with ~ path alias matching tsconfig)
+    - src/lib/sources/__tests__/types.test.ts (9 tests: isValidSourceCollection, VALID_SOURCE_COLLECTIONS, enums, EMPTY_CURSOR)
+    - src/lib/sources/__tests__/normalize.test.ts (11 tests: normalizeYouTubeVideo field mapping + coercion, normalizeXTweet field mapping + title truncation + fallback authorName)
+    - src/lib/sources/__tests__/provider-registry.test.ts (9 tests: register/get/has/resolve/sources, error cases for duplicates/missing/invalid combos)
+    - src/lib/sync/__tests__/engine.test.ts (11 tests: page fetching, reachedEnd, reconciliation trigger, consecutive-existing heuristic, cooldown enforcement, error state persistence, per-source limits)
+    - src/lib/sync/__tests__/reconcile.test.ts (4 tests: inactive count, syncStatus update, with/without syncStartedAt)
+    - src/lib/sync/__tests__/persistence.test.ts (6 tests: loadSyncState empty cursor, saveSyncState upsert, cooldown check, upsertBatch empty/non-empty)
+  Files changed:
+    - package.json (added vitest devDependency, test/test:watch scripts)
+    - src/lib/sources/x-provider.ts (exported normalizeXTweet for testability)
+    - src/lib/sync/engine.ts (added status field to success/failure logs, added errorCode field to failure logs)
+  Outcome: tsc --noEmit passes cleanly. 50 tests across 6 test files all passing. Observability enhanced with status/errorCode fields in sync logs. Sync-run summaries already present (synced/new/existing/inactive/durationMs).

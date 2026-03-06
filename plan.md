@@ -166,26 +166,26 @@ Deliver X likes/bookmarks support on top of a scalable, provider-agnostic sync a
 - ~~No concurrent sync race for same user/source/collection.~~
 - ~~Quota enforcement remains atomic under concurrency.~~
 
-## WS7 - Testing, observability, and rollout
+## ~~WS7 - Testing, observability, and rollout~~ ✅
 
 ### Test plan
 
-- Unit tests:
-  - Provider normalization
-  - Cursor handling
-  - Reconciliation rules
-- Integration tests:
-  - Upsert idempotency
-  - Sync state checkpoint updates
-  - Quota and error handling
+- ~~Unit tests:~~
+  - ~~Provider normalization~~
+  - ~~Cursor handling~~
+  - ~~Reconciliation rules~~
+- ~~Integration tests:~~
+  - ~~Upsert idempotency~~
+  - ~~Sync state checkpoint updates~~
+  - ~~Quota and error handling~~
 - Manual/e2e smoke:
   - OAuth connect/disconnect
   - Quick sync, extended sync, and rerun behavior
 
 ### Observability
 
-- Standard log fields: `userId`, `source`, `collection`, `mode`, `duration`, `status`, `errorCode`.
-- Sync-run summaries with inserted/updated/inactivated counts.
+- ~~Standard log fields: `userId`, `source`, `collection`, `mode`, `duration`, `status`, `errorCode`.~~
+- ~~Sync-run summaries with inserted/updated/inactivated counts.~~
 
 ### Rollout sequence
 

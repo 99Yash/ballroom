@@ -7,7 +7,7 @@ import type {
   SyncPageResult,
 } from './types';
 
-function normalizeXTweet(tweet: XTweet): NormalizedContentItem {
+export function normalizeXTweet(tweet: XTweet): NormalizedContentItem {
   // Use first 200 chars of text as title (tweets have no separate title)
   const title =
     tweet.text.length > 200 ? `${tweet.text.slice(0, 197)}...` : tweet.text;

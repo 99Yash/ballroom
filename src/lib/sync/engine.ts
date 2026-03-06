@@ -197,6 +197,7 @@ export async function runSync(
       source,
       collection,
       mode: options.mode,
+      status: 'success',
       synced: totalFetched,
       new: totalNew,
       existing: totalExisting,
@@ -223,6 +224,9 @@ export async function runSync(
       source,
       collection,
       mode: options.mode,
+      status: 'error',
+      errorCode:
+        error instanceof AppError ? error.code : 'INTERNAL_SERVER_ERROR',
       durationMs,
       error: error instanceof Error ? error.message : String(error),
     });
