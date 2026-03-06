@@ -1,0 +1,7 @@
+WS1 - Domain and contracts: DONE
+  Files created:
+    - src/lib/sources/types.ts (ContentSource, CollectionType, SyncMode, NormalizedContentItem, SyncCursor, SyncPageResult, SourceProvider, SyncResult, VALID_SOURCE_COLLECTIONS)
+    - src/lib/sources/provider-registry.ts (ProviderRegistry singleton with register/get/resolve/has/sources)
+    - src/lib/sources/normalize.ts (normalizeYouTubeVideo adapter)
+    - src/lib/sources/index.ts (barrel export)
+  Outcome: tsc --noEmit passes cleanly. Provider-agnostic contracts ready for WS2 (sync engine) and WS4 (X adapter).
