@@ -1,0 +1,80 @@
+WS1 - Domain and contracts: DONE
+  Files created:
+    - src/lib/sources/types.ts (ContentSource, CollectionType, SyncMode, NormalizedContentItem, SyncCursor, SyncPageResult, SourceProvider, SyncResult, VALID_SOURCE_COLLECTIONS)
+    - src/lib/sources/provider-registry.ts (ProviderRegistry singleton with register/get/resolve/has/sources)
+    - src/lib/sources/normalize.ts (normalizeYouTubeVideo adapter)
+    - src/lib/sources/index.ts (barrel export)
+  Outcome: tsc --noEmit passes cleanly. Provider-agnostic contracts ready for WS2 (sync engine) and WS4 (X adapter).
+
+WS2 - Data model and storage: DONE
+  Files changed:
+    - src/db/schemas/videos.ts (added contentSourceEnum, collectionTypeEnum, source/collection/externalId/providerMetadata columns to videos table, created sync_state table, added multi-source indexes and unique constraints, exported DatabaseSyncState/NewSyncState types)
+    - src/lib/sync.ts (added source/collection/externalId fields to YouTube insert for backward compat)
+    - drizzle/0009_nice_exiles.sql (migration: create enums, sync_state table, add columns with youtube_id backfill, indexes, unique constraints)
+  Outcome: tsc --noEmit passes cleanly. Migration applied successfully. Existing YouTube upsert path works with new columns (externalId = youtubeId). sync_state table ready for cursor/checkpoint tracking per (userId, source, collection).
+
+WS3 - Sync engine refactor: DONE
+  Files created:
+    - src/lib/sync/persistence.ts (loadSyncState, saveSyncState, upsertBatch — generic batch upsert with quota tracking, sync_state CRUD per userId/source/collection)
+    - src/lib/sync/reconcile.ts (reconcileInactive — marks unseen items as inactive, scoped to source/collection)
+    - src/lib/sync/engine.ts (runSync — generic progressive sync loop with mode-based limits, consecutive-existing heuristic, reconciliation on reachedEnd, error state persistence)
+    - src/lib/sync/index.ts (barrel export)
+    - src/lib/sources/youtube-provider.ts (SourceProvider implementation wrapping fetchLikedVideos + normalizeYouTubeVideo)
+  Files changed:
+    - src/lib/sources/index.ts (added youtubeProvider export + auto-registration in provider registry)
+    - src/lib/sync.ts (rewritten as backward-compat layer: quickSync/extendedSync/fullSync/progressiveSync now delegate to runSync engine, map SyncResult.inactive → legacy .unliked field)
+  Outcome: tsc --noEmit passes cleanly. YouTube sync parity maintained — existing API routes and workflows unchanged. Generic engine ready for WS4 (X provider).
+
+WS4 - X provider integration: DONE
+  Files created:
+    - src/lib/x.ts (low-level X API v2 client: getXCredentials, refreshAccessToken, xApiFetch with auto-refresh on 401, fetchXCollection for bookmarks/likes, XTweet types, error mapping for 401/403/429)
+    - src/lib/sources/x-provider.ts (SourceProvider implementation: normalizeXTweet maps tweet→NormalizedContentItem, xProvider supports likes+bookmarks collections)
+  Files changed:
+    - src/lib/env.ts (added optional X_CLIENT_ID, X_CLIENT_SECRET server env vars)
+    - src/lib/auth/server.ts (conditionally adds Twitter social provider with tweet.read, users.read, bookmark.read, like.read, offline.access scopes when X env vars are present)
+    - src/lib/sources/index.ts (added xProvider export + auto-registration in provider registry)
+  Outcome: tsc --noEmit passes cleanly. X provider fully wired into generic sync engine. OAuth flow conditional on env vars — app works without X configured. Error mapping covers 401 (reauth), 403 (scope), 429 (rate limit) with token auto-refresh.
+
+WS5 - API surface and UI evolution: DONE
+  Files created:
+    - src/types/content.ts (ContentItem, SerializedContentItem, serializeContentItem — provider-agnostic content types for generic endpoints)
+    - src/app/api/sync/route.ts (POST /api/sync — source-aware sync endpoint accepting {source, collection, mode}, validates source/collection combos, delegates to runSync engine)
+    - src/app/api/content/route.ts (GET /api/content — paginated multi-source content listing with optional source/collection/category/search filters, full-text search with ranking)
+    - src/app/api/content/counts/route.ts (GET /api/content/counts — aggregate counts with byCategory, bySource, bySourceCollection breakdowns)
+    - src/components/content-card.tsx (ContentCard — multi-source content card with source icon badge, YouTube play overlay, X tweet layout, author/date metadata)
+  Files changed:
+    - src/lib/validations/api.ts (added syncContentSchema with source/collection/mode validation)
+    - src/app/api/sync-status/route.ts (rewritten: source-aware sync status using syncState table, returns bySourceCollection map with lastSyncAt/active/inactive/reachedEnd per source:collection, legacy compat fields preserved)
+    - src/app/api/youtube/sync/route.ts (refactored: now calls runSync directly instead of legacy quickSync/extendedSync, preserves legacy response shape with unliked field)
+    - src/app/api/youtube/videos/route.ts (scoped to source=youtube for backward compat)
+    - src/app/api/youtube/videos/counts/route.ts (scoped to source=youtube for backward compat)
+    - src/components/sync-button.tsx (added source+collection sync actions: YouTube Quick/Extended, X Bookmarks, X Likes in dropdown with source labels and icons)
+    - src/app/dashboard/dashboard-client.tsx (switched to generic /api/content and /api/content/counts endpoints, added source filter pills with per-source counts, uses ContentCard instead of VideoCard, updated empty states and search placeholder)
+    - next.config.ts (added pbs.twimg.com for X/Twitter media images)
+  Outcome: tsc --noEmit passes cleanly. Generic content API surface complete. Dashboard supports mixed-source browsing with source filters. YouTube backward-compat routes preserved. SyncButton supports per-source sync actions.
+
+WS6 - Workflows, quotas, and cost controls: DONE
+  Files changed:
+    - src/lib/constants.tsx (added SourceSyncLimits interface and sourceLimits config per source — youtube gets 10k maxDepth/5min cooldown, x gets 2k maxDepth/15min cooldown with tighter extendedSyncLimit of 200)
+    - src/db/schemas/videos.ts (added lastFullSyncAt timestamp column to sync_state table for full-sync cooldown tracking)
+    - drizzle/0010_broad_human_cannonball.sql (migration: add last_full_sync_at column to sync_state)
+    - src/lib/sync/persistence.ts (added SaveSyncStateOptions with markFullSync flag, saveSyncState now records lastFullSyncAt on full syncs, added getFullSyncCooldownRemaining for per-source cooldown checks)
+    - src/lib/sync/engine.ts (getSyncLimits now reads per-source limits from APP_CONFIG.sourceLimits, full-sync cooldown enforcement before sync loop, enhanced logging with durationMs and source/collection fields on both success and failure)
+    - src/workflows/sync-videos.ts (source-aware payloads: schema accepts source/collection with youtube/likes defaults, concurrency key format userId:source:collection, tasks call runSync directly instead of legacy wrappers, trigger helpers accept source/collection params, batchTriggerIncrementalSync accepts SyncItem[] instead of string[], TOO_MANY_REQUESTS errors abort without retry)
+    - src/workflows/scheduled-sync.ts (multi-source scheduled sync: buildSyncItemsForUsers queries account table to find connected providers per user, maps google→youtube/likes and twitter→x/likes+x/bookmarks, only triggers syncs for sources user has actually connected, tracks totalSyncItems metric)
+  Outcome: tsc --noEmit passes cleanly. Workflow tasks are source-aware with userId:source:collection concurrency keys preventing race conditions per source/collection. Per-source cost controls enforce tighter limits for X (2k max items vs 10k YouTube, 15min vs 5min full-sync cooldown). Quota enforcement remains atomic (unchanged checkAndIncrementQuotaWithinTx). Scheduled sync only triggers for connected providers.
+
+WS7 - Testing, observability, and rollout: DONE
+  Files created:
+    - vitest.config.ts (Vitest config with ~ path alias matching tsconfig)
+    - src/lib/sources/__tests__/types.test.ts (9 tests: isValidSourceCollection, VALID_SOURCE_COLLECTIONS, enums, EMPTY_CURSOR)
+    - src/lib/sources/__tests__/normalize.test.ts (11 tests: normalizeYouTubeVideo field mapping + coercion, normalizeXTweet field mapping + title truncation + fallback authorName)
+    - src/lib/sources/__tests__/provider-registry.test.ts (9 tests: register/get/has/resolve/sources, error cases for duplicates/missing/invalid combos)
+    - src/lib/sync/__tests__/engine.test.ts (11 tests: page fetching, reachedEnd, reconciliation trigger, consecutive-existing heuristic, cooldown enforcement, error state persistence, per-source limits)
+    - src/lib/sync/__tests__/reconcile.test.ts (4 tests: inactive count, syncStatus update, with/without syncStartedAt)
+    - src/lib/sync/__tests__/persistence.test.ts (6 tests: loadSyncState empty cursor, saveSyncState upsert, cooldown check, upsertBatch empty/non-empty)
+  Files changed:
+    - package.json (added vitest devDependency, test/test:watch scripts)
+    - src/lib/sources/x-provider.ts (exported normalizeXTweet for testability)
+    - src/lib/sync/engine.ts (added status field to success/failure logs, added errorCode field to failure logs)
+  Outcome: tsc --noEmit passes cleanly. 50 tests across 6 test files all passing. Observability enhanced with status/errorCode fields in sync logs. Sync-run summaries already present (synced/new/existing/inactive/durationMs).

@@ -36,6 +36,13 @@ export const getProviderById = (
   return OAUTH_PROVIDERS[id];
 };
 
+export interface SourceSyncLimits {
+  quickSyncLimit: number;
+  extendedSyncLimit: number;
+  maxDepth: number;
+  fullSyncCooldownMs: number;
+}
+
 export const APP_CONFIG = {
   youtube: {
     defaultSyncLimit: 100,
@@ -52,6 +59,21 @@ export const APP_CONFIG = {
     batchSize: 50,
     consecutiveExistingBatchesThreshold: 2,
   },
+  /** Per-source sync limits and cost controls. */
+  sourceLimits: {
+    youtube: {
+      quickSyncLimit: 50,
+      extendedSyncLimit: 500,
+      maxDepth: 10_000,
+      fullSyncCooldownMs: 5 * 60 * 1000, // 5 minutes
+    },
+    x: {
+      quickSyncLimit: 50,
+      extendedSyncLimit: 200,
+      maxDepth: 2_000,
+      fullSyncCooldownMs: 15 * 60 * 1000, // 15 minutes
+    },
+  } satisfies Record<string, SourceSyncLimits>,
   quota: {
     sync: {
       freeLimit: 5_000,

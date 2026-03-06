@@ -2,6 +2,7 @@ import { sql, type SQL } from 'drizzle-orm';
 import {
   boolean,
   index,
+  jsonb,
   pgEnum,
   pgTable,
   text,
@@ -11,6 +12,16 @@ import {
 } from 'drizzle-orm/pg-core';
 import { user } from './auth';
 import { createId, lifecycle_dates } from './helpers';
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+export const contentSourceEnum = pgEnum('content_source', ['youtube', 'x']);
+export const collectionTypeEnum = pgEnum('collection_type', [
+  'likes',
+  'bookmarks',
+]);
 
 export const videoSyncStatusEnum = pgEnum('video_sync_status', [
   'active',
@@ -97,10 +108,21 @@ export const videos = pgTable(
     lastAnalyzedAt: timestamp('last_analyzed_at'),
     syncStatus: videoSyncStatusEnum('sync_status').default('active').notNull(),
     lastSeenAt: timestamp('last_seen_at', { withTimezone: true }),
+    // Multi-source fields (WS2 additive)
+    source: contentSourceEnum('source').default('youtube').notNull(),
+    collection: collectionTypeEnum('collection').default('likes').notNull(),
+    externalId: text('external_id').notNull(),
+    providerMetadata: jsonb('provider_metadata'),
     ...lifecycle_dates,
   },
   (table) => [
     unique('videos_user_youtube_unique').on(table.userId, table.youtubeId),
+    unique('videos_user_source_collection_external_id').on(
+      table.userId,
+      table.source,
+      table.collection,
+      table.externalId
+    ),
     index('idx_videos_user_id').on(table.userId),
     index('idx_videos_category_id').on(table.categoryId),
     index('idx_videos_youtube_id').on(table.youtubeId),
@@ -112,6 +134,18 @@ export const videos = pgTable(
     index('idx_videos_search_vector').using(
       'gin',
       createVideoSearchVector(table.title, table.description, table.channelName)
+    ),
+    // Multi-source indexes (WS2)
+    index('idx_videos_user_source').on(table.userId, table.source),
+    index('idx_videos_user_source_category').on(
+      table.userId,
+      table.source,
+      table.categoryId
+    ),
+    index('idx_videos_user_source_created_at').on(
+      table.userId,
+      table.source,
+      table.createdAt
     ),
   ]
 );
@@ -133,11 +167,50 @@ export const DEFAULT_CATEGORIES = [
   'Other',
 ] as const;
 
+// ---------------------------------------------------------------------------
+// Sync state table – tracks cursor/checkpoint per (userId, source, collection)
+// ---------------------------------------------------------------------------
+
+export const syncState = pgTable(
+  'sync_state',
+  {
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => createId('ss')),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    source: contentSourceEnum('source').notNull(),
+    collection: collectionTypeEnum('collection').notNull(),
+    cursor: text('cursor'),
+    lastSyncedAt: timestamp('last_synced_at', { withTimezone: true }),
+    reachedEnd: boolean('reached_end').default(false).notNull(),
+    lastError: text('last_error'),
+    lastFullSyncAt: timestamp('last_full_sync_at', { withTimezone: true }),
+    ...lifecycle_dates,
+  },
+  (table) => [
+    unique('sync_state_user_source_collection').on(
+      table.userId,
+      table.source,
+      table.collection
+    ),
+    index('idx_sync_state_user_id').on(table.userId),
+  ]
+);
+
+// ---------------------------------------------------------------------------
+// Inferred types
+// ---------------------------------------------------------------------------
+
 export type DatabaseVideo = typeof videos.$inferSelect;
 export type NewVideo = typeof videos.$inferInsert;
 
 export type DatabaseCategory = typeof categories.$inferSelect;
 export type NewCategory = typeof categories.$inferInsert;
+
+export type DatabaseSyncState = typeof syncState.$inferSelect;
+export type NewSyncState = typeof syncState.$inferInsert;
 
 /**
  * Reusable select object for Category queries.

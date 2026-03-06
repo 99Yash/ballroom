@@ -4,30 +4,35 @@ import {
   ChevronLeft,
   ChevronRight,
   FolderOpen,
+  Link,
   LogOut,
   Search,
+  Twitter,
   X,
   Youtube,
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { parseAsInteger, parseAsString, useQueryState } from 'nuqs';
 import * as React from 'react';
 import { toast } from 'sonner';
 import { CategoryManager } from '~/components/category-manager';
+import { ConnectedAccounts } from '~/components/connected-accounts';
+import { ContentCard } from '~/components/content-card';
 import { QuotaDisplay } from '~/components/quota-display';
 import { SyncButton } from '~/components/sync-button';
 import { Button } from '~/components/ui/button';
 import { Input } from '~/components/ui/input';
-import { VideoCard } from '~/components/video-card';
 import { authClient } from '~/lib/auth/client';
 import { siteConfig } from '~/lib/site';
+import type { ContentSource } from '~/lib/sources/types';
 import type { Category } from '~/types/category';
-import type { SerializedVideo } from '~/types/video';
+import type { SerializedContentItem } from '~/types/content';
 
 interface DashboardClientProps {
   initialCategories: Category[];
   userName: string;
+  userEmail: string;
 }
 
 const pageParser = parseAsInteger.withDefault(1).withOptions({
@@ -40,17 +45,66 @@ const searchParser = parseAsString.withDefault('').withOptions({
   shallow: false,
 });
 
+const SOURCE_FILTERS: Array<{
+  value: ContentSource | null;
+  label: string;
+  icon: React.ElementType;
+  color: string;
+}> = [
+  { value: null, label: 'All', icon: FolderOpen, color: '' },
+  { value: 'youtube', label: 'YouTube', icon: Youtube, color: 'text-red-500' },
+  { value: 'x', label: 'X', icon: Twitter, color: '' },
+];
+
 export function DashboardClient({
   initialCategories,
   userName,
+  userEmail,
 }: DashboardClientProps) {
   const router = useRouter();
-  const [videos, setVideos] = React.useState<SerializedVideo[]>([]);
+  const searchParams = useSearchParams();
+  const [accountsOpen, setAccountsOpen] = React.useState(false);
+
+  // Detect OAuth callback errors (e.g., user denied, provider error, account already linked)
+  React.useEffect(() => {
+    const error = searchParams.get('error');
+    if (!error) return;
+
+    const lowerError = error.toLowerCase();
+    let description = error;
+
+    if (
+      lowerError.includes('denied') ||
+      lowerError.includes('cancelled') ||
+      lowerError.includes('canceled') ||
+      lowerError.includes('access_denied')
+    ) {
+      description = 'Authorization was denied. You can try again from Accounts.';
+    } else if (
+      lowerError.includes('already linked') ||
+      lowerError.includes('already associated')
+    ) {
+      description =
+        'This account is already linked to another user. Please use a different account.';
+    } else if (lowerError.includes('configuration') || lowerError.includes('not configured')) {
+      description = 'OAuth provider is not configured. Please contact the administrator.';
+    }
+
+    toast.error('Account linking failed', { description });
+
+    // Clean the error param from the URL
+    const url = new URL(window.location.href);
+    url.searchParams.delete('error');
+    router.replace(url.pathname + url.search, { scroll: false });
+  }, [searchParams, router]);
+  const [items, setItems] = React.useState<SerializedContentItem[]>([]);
   const [categories, setCategories] =
     React.useState<Category[]>(initialCategories);
   const [selectedCategory, setSelectedCategory] = React.useState<string | null>(
     null
   );
+  const [selectedSource, setSelectedSource] =
+    React.useState<ContentSource | null>(null);
   const [searchQuery, setSearchQuery] = useQueryState('search', searchParser);
   const [localSearchQuery, setLocalSearchQuery] = React.useState(searchQuery || '');
   const [currentPage, setCurrentPage] = useQueryState('page', pageParser);
@@ -66,7 +120,7 @@ export function DashboardClient({
     const timer = setTimeout(() => {
       const trimmedLocal = localSearchQuery.trim();
       const trimmedUrl = (searchQuery || '').trim();
-      
+
       if (trimmedLocal !== trimmedUrl) {
         setSearchQuery(trimmedLocal || null);
         setCurrentPage(1);
@@ -76,11 +130,9 @@ export function DashboardClient({
     return () => clearTimeout(timer);
   }, [localSearchQuery, searchQuery, setSearchQuery, setCurrentPage]);
 
-  const fetchVideos = React.useCallback(async () => {
+  const fetchContent = React.useCallback(async () => {
     setIsLoading(true);
     try {
-      // Clamp page to valid range before fetching to prevent out-of-bounds requests
-      // Use previous totalPages to avoid unnecessary fetches
       let page = Math.max(1, currentPage);
       if (totalPages > 0 && page > totalPages) {
         page = 1;
@@ -94,6 +146,10 @@ export function DashboardClient({
         limit: limit.toString(),
       });
 
+      if (selectedSource) {
+        params.set('source', selectedSource);
+      }
+
       if (selectedCategory === 'uncategorized') {
         params.set('uncategorized', 'true');
       } else if (selectedCategory) {
@@ -104,30 +160,29 @@ export function DashboardClient({
         params.set('search', searchQuery.trim());
       }
 
-      const response = await fetch(`/api/youtube/videos?${params}`);
+      const response = await fetch(`/api/content?${params}`);
       if (!response.ok) {
-        throw new Error('Failed to fetch videos');
+        throw new Error('Failed to fetch content');
       }
 
       const data = await response.json();
       const newTotalPages = data.pagination?.totalPages || 0;
-      setVideos(data.videos || []);
+      setItems(data.items || []);
       setTotalPages(newTotalPages);
 
-      // Only reset to page 1 if we're out of bounds AND not already on page 1
-      // This prevents infinite loops if the API returns inconsistent totalPages
       if (newTotalPages > 0 && page > newTotalPages && currentPage !== 1) {
         setCurrentPage(1);
       }
     } catch {
-      toast.error('Failed to fetch videos');
-      setVideos([]);
+      toast.error('Failed to fetch content');
+      setItems([]);
     } finally {
       setIsLoading(false);
     }
   }, [
     currentPage,
     selectedCategory,
+    selectedSource,
     searchQuery,
     limit,
     totalPages,
@@ -135,18 +190,28 @@ export function DashboardClient({
   ]);
 
   React.useEffect(() => {
-    fetchVideos();
-  }, [fetchVideos]);
+    fetchContent();
+  }, [fetchContent]);
 
   const [categoryCounts, setCategoryCounts] = React.useState<
     Record<string, number>
   >({});
+  const [sourceCounts, setSourceCounts] = React.useState<
+    Record<string, number>
+  >({});
 
-  const fetchCategoryCounts = React.useCallback(async () => {
+  const fetchCounts = React.useCallback(async () => {
     try {
-      const response = await fetch('/api/youtube/videos/counts');
+      const params = new URLSearchParams();
+      if (selectedSource) {
+        params.set('source', selectedSource);
+      }
+      const url = params.toString()
+        ? `/api/content/counts?${params}`
+        : '/api/content/counts';
+      const response = await fetch(url);
       if (!response.ok) {
-        throw new Error('Failed to fetch category counts');
+        throw new Error('Failed to fetch counts');
       }
 
       const data = await response.json();
@@ -157,24 +222,33 @@ export function DashboardClient({
       };
 
       setCategoryCounts(counts);
+      setSourceCounts(data.bySource || {});
     } catch {
-      // Category counts are not critical, so we silently fail
+      // Counts are not critical, so we silently fail
     }
-  }, []);
+  }, [selectedSource]);
 
   React.useEffect(() => {
-    fetchCategoryCounts();
-  }, [fetchCategoryCounts]);
+    fetchCounts();
+  }, [fetchCounts]);
 
   const handleRefresh = () => {
-    fetchVideos();
-    fetchCategoryCounts();
+    fetchContent();
+    fetchCounts();
     router.refresh();
   };
 
   const handleCategoryChange = React.useCallback(
     (categoryId: string | null) => {
       setSelectedCategory(categoryId);
+      setCurrentPage(1);
+    },
+    [setCurrentPage]
+  );
+
+  const handleSourceChange = React.useCallback(
+    (source: ContentSource | null) => {
+      setSelectedSource(source);
       setCurrentPage(1);
     },
     [setCurrentPage]
@@ -195,14 +269,19 @@ export function DashboardClient({
     if (selectedCategory === categoryId) {
       handleCategoryChange(null);
     } else {
-      fetchVideos();
-      fetchCategoryCounts();
+      fetchContent();
+      fetchCounts();
     }
   };
 
+  const totalAllSources = Object.values(sourceCounts).reduce(
+    (sum, c) => sum + c,
+    0
+  );
+
   const getPageNumbers = React.useMemo(() => {
     const pages: (number | 'ellipsis')[] = [];
-    const delta = 1; // Pages to show on each side of current page
+    const delta = 1;
     const total = totalPages;
     const current = currentPage;
 
@@ -237,31 +316,28 @@ export function DashboardClient({
   const getEmptyStateMessage = React.useMemo(() => {
     const searchValue = searchQuery || '';
     const hasSearchQuery = searchValue.trim().length > 0;
-    const hasNoVideos = categoryCounts.all === 0;
+    const hasNoContent = categoryCounts.all === 0 && totalAllSources === 0;
 
-    // If no videos at all, always prompt to sync first (even if searching)
-    if (hasNoVideos) {
+    if (hasNoContent) {
       return {
-        title: hasSearchQuery ? 'No videos to search' : 'No videos yet',
+        title: hasSearchQuery ? 'No content to search' : 'No content yet',
         description:
-          'Click "Sync & Categorize" to fetch your liked videos from YouTube and automatically organize them.',
+          'Click "Sync" to fetch your liked videos and bookmarks, then use "Categorize" to organize them with AI.',
       };
     }
 
-    // If searching and videos exist but none match the search query
     if (hasSearchQuery) {
       return {
-        title: 'No videos found',
-        description: `No videos match "${searchValue}". Try a different search term or clear the search.`,
+        title: 'No results found',
+        description: `No content matches "${searchValue}". Try a different search term or clear the search.`,
       };
     }
 
-    // Videos exist but don't match the selected filter
     return {
-      title: 'No videos yet',
-      description: 'No videos match the selected filter.',
+      title: 'No content here',
+      description: 'No content matches the selected filters.',
     };
-  }, [searchQuery, categoryCounts.all]);
+  }, [searchQuery, categoryCounts.all, totalAllSources]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -276,9 +352,9 @@ export function DashboardClient({
             <motion.div
               whileHover={{ scale: 1.05, rotate: 5 }}
               whileTap={{ scale: 0.95 }}
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-red-600 to-red-700 shadow-lg shadow-red-600/20"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-primary/80 shadow-lg shadow-primary/20"
             >
-              <Youtube className="h-5 w-5 text-white" />
+              <FolderOpen className="h-5 w-5 text-primary-foreground" />
             </motion.div>
             <div className="min-w-0 flex-1">
               <h1
@@ -302,6 +378,14 @@ export function DashboardClient({
             <QuotaDisplay />
             <Button
               variant="ghost"
+              onClick={() => setAccountsOpen(true)}
+              className="gap-2 transition-colors hover:bg-muted/50"
+            >
+              <Link className="h-4 w-4" />
+              <span className="hidden sm:inline">Accounts</span>
+            </Button>
+            <Button
+              variant="ghost"
               onClick={handleSignOut}
               className="gap-2 transition-colors hover:bg-muted/50"
             >
@@ -322,6 +406,7 @@ export function DashboardClient({
           <SyncButton
             onSyncComplete={handleRefresh}
             onCategorizeComplete={handleRefresh}
+            onConnectX={() => setAccountsOpen(true)}
           />
           <CategoryManager
             categories={categories}
@@ -329,6 +414,43 @@ export function DashboardClient({
             onCategoryDeleted={handleCategoryDeleted}
             onCategoriesChanged={handleRefresh}
           />
+        </motion.div>
+
+        {/* Source filter pills */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.15 }}
+          className="mb-4 flex flex-wrap gap-2"
+        >
+          {SOURCE_FILTERS.map((sf) => {
+            const isActive = selectedSource === sf.value;
+            const sourceCount =
+              sf.value === null
+                ? totalAllSources
+                : sourceCounts[sf.value] ?? 0;
+            // Only show source pills that have content (or the "All" pill always)
+            if (sf.value !== null && sourceCount === 0) return null;
+            const Icon = sf.icon;
+            return (
+              <Button
+                key={sf.value ?? 'all'}
+                variant={isActive ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => handleSourceChange(sf.value)}
+                disabled={isLoading}
+                className="h-8 gap-1.5 whitespace-nowrap rounded-lg border-border/50 px-3 text-sm font-medium shadow-sm transition-all duration-200 hover:shadow-md disabled:opacity-50"
+              >
+                <Icon
+                  className={`h-3.5 w-3.5 ${!isActive ? sf.color : ''}`}
+                />
+                {sf.label}
+                <span className="ml-0.5 font-normal opacity-80">
+                  ({sourceCount})
+                </span>
+              </Button>
+            );
+          })}
         </motion.div>
 
         <motion.div
@@ -340,13 +462,13 @@ export function DashboardClient({
           <div className="relative max-w-md">
             <Input
               type="search"
-              placeholder="Search videos by title, description, or channel..."
+              placeholder="Search by title, description, or author..."
               value={localSearchQuery}
               onChange={(e) => {
                 setLocalSearchQuery(e.target.value);
               }}
               className="peer h-11 rounded-xl border-border/50 bg-background pl-11 pr-11 text-sm shadow-sm transition-all duration-200 focus:border-ring focus:bg-background focus:shadow-md [&::-webkit-search-cancel-button]:hidden [&::-webkit-search-decoration]:hidden [&::-moz-search-clear-button]:hidden"
-              aria-label="Search videos by title, description, or channel"
+              aria-label="Search by title, description, or author"
             />
             <Search
               className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/60 transition-colors duration-200 peer-focus-within:text-muted-foreground"
@@ -367,6 +489,7 @@ export function DashboardClient({
           </div>
         </motion.div>
 
+        {/* Category filter pills */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -443,22 +566,22 @@ export function DashboardClient({
             >
               <div className="mb-6 h-10 w-10 animate-spin rounded-full border-4 border-muted border-t-primary" />
               <p className="text-sm font-medium text-muted-foreground">
-                Loading videos...
+                Loading content...
               </p>
             </motion.div>
-          ) : videos.length > 0 ? (
+          ) : items.length > 0 ? (
             <motion.div
-              key="videos"
+              key="content"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.3 }}
             >
               <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                {videos.map((video, index) => (
-                  <VideoCard
-                    key={video.id}
-                    video={video}
+                {items.map((item, index) => (
+                  <ContentCard
+                    key={item.id}
+                    item={item}
                     priority={index < 6}
                   />
                 ))}
@@ -578,6 +701,12 @@ export function DashboardClient({
           </motion.div>
         )}
       </main>
+
+      <ConnectedAccounts
+        open={accountsOpen}
+        onOpenChange={setAccountsOpen}
+        userEmail={userEmail}
+      />
     </div>
   );
 }

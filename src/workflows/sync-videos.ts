@@ -8,15 +8,24 @@ import {
 import * as z from 'zod/v4';
 import { APP_CONFIG } from '~/lib/constants';
 import { AppError, AuthenticationError } from '~/lib/errors';
-import { fullSync, quickSync } from '~/lib/sync';
+import type { CollectionType, ContentSource } from '~/lib/sources/types';
+import { runSync } from '~/lib/sync/engine';
 
 const syncPayloadSchema = z.object({
   userId: z.string().min(1, 'userId is required'),
+  source: z.enum(['youtube', 'x']).default('youtube'),
+  collection: z.enum(['likes', 'bookmarks']).default('likes'),
 });
+
+type SyncPayload = z.infer<typeof syncPayloadSchema>;
+
+function buildConcurrencyKey(payload: SyncPayload): string {
+  return `${payload.userId}:${payload.source}:${payload.collection}`;
+}
 
 function handleSyncError(
   error: unknown,
-  payload: { userId: string },
+  payload: SyncPayload,
   runId: string
 ): never {
   metadata
@@ -33,6 +42,8 @@ function handleSyncError(
 
     logger.error('Sync aborted - auth error', {
       userId: payload.userId,
+      source: payload.source,
+      collection: payload.collection,
       runId,
       authErrorType: error.authErrorType,
       error: error.message,
@@ -40,11 +51,18 @@ function handleSyncError(
     throw new AbortTaskRunError(error.message);
   }
 
-  if (error instanceof AppError && error.code === 'QUOTA_EXCEEDED') {
-    metadata.set('errorType', 'quota_exceeded').set('aborted', true);
+  if (
+    error instanceof AppError &&
+    (error.code === 'QUOTA_EXCEEDED' || error.code === 'TOO_MANY_REQUESTS')
+  ) {
+    metadata
+      .set('errorType', error.code === 'QUOTA_EXCEEDED' ? 'quota_exceeded' : 'cooldown')
+      .set('aborted', true);
 
-    logger.warn('Sync aborted - quota exceeded', {
+    logger.warn(`Sync aborted - ${error.code.toLowerCase()}`, {
       userId: payload.userId,
+      source: payload.source,
+      collection: payload.collection,
       runId,
       error: error.message,
     });
@@ -55,6 +73,8 @@ function handleSyncError(
 
   logger.error('Sync failed - will retry', {
     userId: payload.userId,
+    source: payload.source,
+    collection: payload.collection,
     runId,
     error: error instanceof Error ? error.message : String(error),
   });
@@ -67,12 +87,12 @@ function handleSyncError(
 }
 
 /**
- * Initial sync task - triggered after user completes onboarding or requests full sync
- * Fetches ALL liked videos using progressive sync (no auto-categorization)
+ * Initial sync task - triggered after user completes onboarding or requests full sync.
+ * Source-aware: accepts source + collection in payload.
  *
- * Note: Per-user serialization is achieved via concurrencyKey at trigger time.
- * The queue has concurrencyLimit: 1, and each user gets their own partition via concurrencyKey.
- * See triggerInitialSync() helper for proper triggering.
+ * Concurrency key: `userId:source:collection` — prevents concurrent syncs
+ * for the same user/source/collection while allowing parallel syncs across
+ * different sources (e.g. YouTube likes + X bookmarks simultaneously).
  */
 export const initialSyncTask = schemaTask({
   id: 'initial-sync',
@@ -89,30 +109,42 @@ export const initialSyncTask = schemaTask({
     factor: 2,
     randomize: true,
   },
-  run: async ({ userId }, { ctx }) => {
-    logger.info('Starting initial sync for user', { userId });
+  run: async (payload, { ctx }) => {
+    const { userId, source, collection } = payload;
+    logger.info('Starting initial sync', { userId, source, collection });
 
     await tags.add(`user:${userId}`);
     await tags.add('sync-type:initial');
+    await tags.add(`source:${source}`);
+    await tags.add(`collection:${collection}`);
+
+    const sourceLimits = APP_CONFIG.sourceLimits[source];
 
     metadata
       .set('status', 'starting')
       .set('userId', userId)
+      .set('source', source)
+      .set('collection', collection)
       .set('phase', 'sync')
-      .set('maxDepth', APP_CONFIG.sync.progressiveMaxDepth)
+      .set('maxDepth', sourceLimits.maxDepth)
       .set('startTime', new Date().toISOString());
 
     metadata.set('status', 'syncing');
 
     try {
-      const syncResult = await fullSync(userId, { checkQuota: true });
+      const syncResult = await runSync(userId, source, collection, {
+        mode: 'full',
+        checkQuota: true,
+      });
 
       logger.info('Initial sync completed', {
         userId,
+        source,
+        collection,
         synced: syncResult.synced,
         new: syncResult.new,
         existing: syncResult.existing,
-        unliked: syncResult.unliked,
+        inactive: syncResult.inactive,
         reachedEnd: syncResult.reachedEnd,
       });
 
@@ -122,24 +154,23 @@ export const initialSyncTask = schemaTask({
         .set('videosSynced', syncResult.synced)
         .set('newVideos', syncResult.new)
         .set('existingVideos', syncResult.existing)
-        .set('unlikedVideos', syncResult.unliked)
+        .set('inactiveItems', syncResult.inactive)
         .set('reachedEnd', syncResult.reachedEnd)
         .set('endTime', new Date().toISOString());
 
       return { sync: syncResult };
     } catch (error) {
-      handleSyncError(error, { userId }, ctx.run.id);
+      handleSyncError(error, payload, ctx.run.id);
     }
   },
 });
 
 /**
- * Incremental sync task - called by the hourly schedule
- * Uses progressive sync with quick limits (no auto-categorization)
+ * Incremental sync task - called by the hourly schedule.
+ * Source-aware: accepts source + collection in payload.
  *
- * Note: Per-user serialization is achieved via concurrencyKey at trigger time.
- * The queue has concurrencyLimit: 1, and each user gets their own partition via concurrencyKey.
- * See triggerIncrementalSync() and batchTriggerIncrementalSync() helpers for proper triggering.
+ * Concurrency key: `userId:source:collection` — prevents concurrent syncs
+ * for the same user/source/collection.
  */
 export const incrementalSyncTask = schemaTask({
   id: 'incremental-sync',
@@ -156,27 +187,39 @@ export const incrementalSyncTask = schemaTask({
     factor: 2,
     randomize: true,
   },
-  run: async ({ userId }, { ctx }) => {
-    logger.info('Starting incremental sync for user', { userId });
+  run: async (payload, { ctx }) => {
+    const { userId, source, collection } = payload;
+    logger.info('Starting incremental sync', { userId, source, collection });
 
     await tags.add(`user:${userId}`);
     await tags.add('sync-type:incremental');
+    await tags.add(`source:${source}`);
+    await tags.add(`collection:${collection}`);
+
+    const sourceLimits = APP_CONFIG.sourceLimits[source];
 
     metadata
       .set('status', 'starting')
       .set('userId', userId)
+      .set('source', source)
+      .set('collection', collection)
       .set('phase', 'sync')
       .set('syncType', 'incremental')
-      .set('initialLimit', APP_CONFIG.sync.quickSyncLimit)
+      .set('initialLimit', sourceLimits.quickSyncLimit)
       .set('startTime', new Date().toISOString());
 
     metadata.set('status', 'syncing');
 
     try {
-      const syncResult = await quickSync(userId, { checkQuota: true });
+      const syncResult = await runSync(userId, source, collection, {
+        mode: 'quick',
+        checkQuota: true,
+      });
 
       logger.info('Incremental sync completed', {
         userId,
+        source,
+        collection,
         synced: syncResult.synced,
         new: syncResult.new,
         existing: syncResult.existing,
@@ -193,42 +236,61 @@ export const incrementalSyncTask = schemaTask({
 
       return { sync: syncResult };
     } catch (error) {
-      handleSyncError(error, { userId }, ctx.run.id);
+      handleSyncError(error, payload, ctx.run.id);
     }
   },
 });
 
 /**
- * Trigger initial sync with per-user concurrency key to prevent concurrent syncs.
- * The concurrencyKey creates a per-user partition of the queue, ensuring
- * only one sync runs per user at a time, preventing:
- * - Race conditions in markVideosAsUnliked
- * - Redundant API calls and database operations
+ * Trigger initial sync with per-user/source/collection concurrency key.
+ * Prevents concurrent syncs for the same source/collection while allowing
+ * parallel syncs across different sources.
  *
  * Use this instead of initialSyncTask.trigger() directly.
  */
-export async function triggerInitialSync(userId: string) {
-  return initialSyncTask.trigger({ userId }, { concurrencyKey: userId });
+export async function triggerInitialSync(
+  userId: string,
+  source: ContentSource = 'youtube',
+  collection: CollectionType = 'likes'
+) {
+  const payload = { userId, source, collection };
+  return initialSyncTask.trigger(payload, {
+    concurrencyKey: buildConcurrencyKey(payload),
+  });
 }
 
 /**
- * Trigger incremental sync with per-user concurrency key to prevent concurrent syncs.
+ * Trigger incremental sync with per-user/source/collection concurrency key.
  * Use this instead of incrementalSyncTask.trigger() directly.
  */
-export async function triggerIncrementalSync(userId: string) {
-  return incrementalSyncTask.trigger({ userId }, { concurrencyKey: userId });
+export async function triggerIncrementalSync(
+  userId: string,
+  source: ContentSource = 'youtube',
+  collection: CollectionType = 'likes'
+) {
+  const payload = { userId, source, collection };
+  return incrementalSyncTask.trigger(payload, {
+    concurrencyKey: buildConcurrencyKey(payload),
+  });
+}
+
+export interface SyncItem {
+  userId: string;
+  source: ContentSource;
+  collection: CollectionType;
 }
 
 /**
- * Batch trigger incremental syncs with per-user concurrency keys.
- * Each user gets their own partition of the queue to prevent concurrent syncs.
+ * Batch trigger incremental syncs with per-user/source/collection concurrency keys.
+ * Each (user, source, collection) triple gets its own queue partition.
  * Use this instead of incrementalSyncTask.batchTrigger() directly.
  */
-export async function batchTriggerIncrementalSync(userIds: string[]) {
+export async function batchTriggerIncrementalSync(items: SyncItem[]) {
+  if (items.length === 0) return;
   return incrementalSyncTask.batchTrigger(
-    userIds.map((userId) => ({
-      payload: { userId },
-      options: { concurrencyKey: userId },
+    items.map((item) => ({
+      payload: item,
+      options: { concurrencyKey: buildConcurrencyKey(item) },
     }))
   );
 }

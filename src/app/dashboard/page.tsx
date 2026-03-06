@@ -31,6 +31,7 @@ export default async function DashboardPage() {
     <DashboardClient
       initialCategories={userCategories}
       userName={session.user.name ?? session.user.email}
+      userEmail={session.user.email}
     />
   );
 }
