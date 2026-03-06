@@ -1,0 +1,6 @@
+WS1 - X availability flag and account status API [DONE]
+  Files created:
+    - src/lib/auth/x-availability.ts (isXConfigured boolean utility)
+    - src/app/api/accounts/route.ts (GET: returns linked accounts + xConfigured flag)
+    - src/hooks/use-connected-accounts.tsx (useConnectedAccounts hook with hasX, xConfigured, refetch)
+  Outcome: tsc --noEmit passes. Client can determine X availability and linked account status.
