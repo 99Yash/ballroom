@@ -28,6 +28,12 @@ export const syncVideosSchema = z.object({
   mode: z.enum(['quick', 'extended']).default('quick'),
 });
 
+export const syncContentSchema = z.object({
+  source: z.enum(['youtube', 'x']),
+  collection: z.enum(['likes', 'bookmarks']),
+  mode: z.enum(['quick', 'extended']).default('quick'),
+});
+
 export const categorizeVideosSchema = z.object({
   force: z.boolean().optional().default(false),
 });

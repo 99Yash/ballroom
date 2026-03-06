@@ -5,16 +5,47 @@ import { categories, createVideoSearchVector, videos } from '~/db/schemas';
 import { requireSession } from '~/lib/auth/session';
 import { createErrorResponse } from '~/lib/errors';
 import { logger } from '~/lib/logger';
-import { serializeVideo } from '~/types/video';
+import {
+  COLLECTION_TYPES,
+  CONTENT_SOURCES,
+  type CollectionType,
+  type ContentSource,
+} from '~/lib/sources/types';
+import { serializeContentItem } from '~/types/content';
 
 export async function GET(request: Request) {
   const startTime = Date.now();
   try {
     const session = await requireSession();
     const { searchParams } = new URL(request.url);
+
+    // Parse optional source/collection filters
+    const sourceParam = searchParams.get('source');
+    const collectionParam = searchParams.get('collection');
     const categoryId = searchParams.get('categoryId');
     const uncategorized = searchParams.get('uncategorized') === 'true';
     const rawSearchQuery = searchParams.get('search');
+
+    // Validate source/collection if provided
+    if (
+      sourceParam &&
+      !CONTENT_SOURCES.includes(sourceParam as ContentSource)
+    ) {
+      return NextResponse.json(
+        { error: `Invalid source: ${sourceParam}` },
+        { status: 400 }
+      );
+    }
+    if (
+      collectionParam &&
+      !COLLECTION_TYPES.includes(collectionParam as CollectionType)
+    ) {
+      return NextResponse.json(
+        { error: `Invalid collection: ${collectionParam}` },
+        { status: 400 }
+      );
+    }
+
     const MAX_SEARCH_QUERY_LENGTH = 300;
     if (rawSearchQuery && rawSearchQuery.length > MAX_SEARCH_QUERY_LENGTH) {
       return NextResponse.json(
@@ -25,12 +56,19 @@ export async function GET(request: Request) {
       );
     }
     const searchQuery = rawSearchQuery?.trim();
-    // Scope to YouTube likes only (legacy compat)
-    const baseConditions = [
-      eq(videos.userId, session.user.id),
-      eq(videos.source, 'youtube'),
-    ];
 
+    const baseConditions: SQL[] = [eq(videos.userId, session.user.id)];
+
+    if (sourceParam) {
+      baseConditions.push(
+        eq(videos.source, sourceParam as ContentSource)
+      );
+    }
+    if (collectionParam) {
+      baseConditions.push(
+        eq(videos.collection, collectionParam as CollectionType)
+      );
+    }
     if (uncategorized) {
       baseConditions.push(isNull(videos.categoryId));
     } else if (categoryId) {
@@ -40,9 +78,6 @@ export async function GET(request: Request) {
     let searchExpr: SQL | null = null;
     let searchRank: SQL | null = null;
     if (searchQuery && searchQuery.length > 0) {
-      // Build a prefix-matching tsquery by splitting words and appending :* to each
-      // This allows "bil" to match "bill", "billion", etc.
-      // Escape special tsquery characters: & | ! ( ) :
       const words = searchQuery
         .split(/\s+/)
         .filter((w) => w.length > 0)
@@ -53,8 +88,6 @@ export async function GET(request: Request) {
         .filter((w) => w.length > 0)
         .join(' & ');
 
-      // Avoid to_tsquery('') which will throw a SQL error. If we can't form a valid
-      // prefix query, fall back to plainto_tsquery on the raw query.
       const tsquery =
         words.length > 0
           ? sql`to_tsquery('simple', ${words})`
@@ -82,18 +115,22 @@ export async function GET(request: Request) {
     );
     const offset = (page - 1) * limit;
 
-    // Use window function to get total count in the same query, avoiding duplicate full-text search
     const queryBuilder = db
       .select({
         id: videos.id,
-        youtubeId: videos.youtubeId,
+        source: videos.source,
+        collection: videos.collection,
+        externalId: videos.externalId,
         title: videos.title,
         description: videos.description,
         thumbnailUrl: videos.thumbnailUrl,
-        channelName: videos.channelName,
+        authorName: videos.channelName,
+        authorId: videos.channelId,
         publishedAt: videos.publishedAt,
         categoryId: videos.categoryId,
         categoryName: categories.name,
+        syncStatus: videos.syncStatus,
+        providerMetadata: videos.providerMetadata,
         totalCount: sql<number>`COUNT(*) OVER()`.as('total_count'),
       })
       .from(videos)
@@ -104,25 +141,25 @@ export async function GET(request: Request) {
       ? queryBuilder.orderBy(desc(searchRank), desc(videos.createdAt))
       : queryBuilder.orderBy(desc(videos.createdAt));
 
-    const userVideos = await orderedQuery.limit(limit).offset(offset);
+    const rows = await orderedQuery.limit(limit).offset(offset);
 
-    const totalCount = userVideos[0]?.totalCount ?? 0;
+    const totalCount = rows[0]?.totalCount ?? 0;
 
-    // Remove totalCount from video objects before serialization (it's not part of Video type)
-    const serializedVideos = userVideos.map((video) => {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { totalCount: _, ...videoWithoutCount } = video;
-      return serializeVideo(videoWithoutCount);
+    const items = rows.map((row) => {
+      const { totalCount: _, ...item } = row;
+      return serializeContentItem(item);
     });
 
-    logger.api('GET', '/api/youtube/videos', {
+    logger.api('GET', '/api/content', {
       userId: session.user.id,
       duration: Date.now() - startTime,
       status: 200,
+      source: sourceParam,
+      collection: collectionParam,
     });
 
     return NextResponse.json({
-      videos: serializedVideos,
+      items,
       pagination: {
         page,
         limit,
@@ -132,7 +169,7 @@ export async function GET(request: Request) {
     });
   } catch (error) {
     const errorResponse = createErrorResponse(error);
-    logger.api('GET', '/api/youtube/videos', {
+    logger.api('GET', '/api/content', {
       duration: Date.now() - startTime,
       status: errorResponse.statusCode,
       error: error instanceof Error ? error : undefined,

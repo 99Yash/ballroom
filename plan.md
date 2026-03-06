@@ -89,7 +89,7 @@ Deliver X likes/bookmarks support on top of a scalable, provider-agnostic sync a
 
 1. ~~Wrap existing YouTube behavior in new engine first.~~
 2. ~~Keep `/api/youtube/*` routes working as compatibility layer.~~
-3. Add source-aware routes once stable.
+3. ~~Add source-aware routes once stable.~~
 
 ### Acceptance criteria
 
@@ -116,31 +116,31 @@ Deliver X likes/bookmarks support on top of a scalable, provider-agnostic sync a
 
 - ~~User can connect X account and complete sync for bookmarks and likes.~~
 
-## WS5 - API surface and UI evolution
+## ~~WS5 - API surface and UI evolution~~ ✅
 
 ### Deliverables
 
-- Unified listing/count endpoints that accept source filters.
-- Sync endpoints become source-aware while preserving old YouTube routes.
-- Dashboard adds source filtering and clear source labeling.
+- ~~Unified listing/count endpoints that accept source filters.~~
+- ~~Sync endpoints become source-aware while preserving old YouTube routes.~~
+- ~~Dashboard adds source filtering and clear source labeling.~~
 
 ### Proposed endpoint direction
 
-- New generic endpoints:
-  - `GET /api/content`
-  - `GET /api/content/counts`
-  - `POST /api/sync` with `{ source, collection, mode }`
-- Backward-compat wrappers:
-  - Existing `/api/youtube/*` routes map to generic service calls.
+- ~~New generic endpoints:~~
+  - ~~`GET /api/content`~~
+  - ~~`GET /api/content/counts`~~
+  - ~~`POST /api/sync` with `{ source, collection, mode }`~~
+- ~~Backward-compat wrappers:~~
+  - ~~Existing `/api/youtube/*` routes map to generic service calls.~~
 
 ### UI updates
 
-- `SyncButton` adds source + collection actions.
-- Dashboard list and counts support source pills/filters.
+- ~~`SyncButton` adds source + collection actions.~~
+- ~~Dashboard list and counts support source pills/filters.~~
 
 ### Acceptance criteria
 
-- User can browse mixed-source data without confusion.
+- ~~User can browse mixed-source data without confusion.~~
 
 ## WS6 - Workflows, quotas, and cost controls
 

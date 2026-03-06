@@ -1,4 +1,4 @@
-import { count, eq } from 'drizzle-orm';
+import { and, count, eq } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
 import { db } from '~/db';
 import { videos } from '~/db/schemas';
@@ -20,13 +20,14 @@ export async function GET() {
   try {
     const session = await requireSession();
 
+    // Scope to YouTube likes only (legacy compat)
     const categoryCounts = await db
       .select({
         categoryId: videos.categoryId,
         count: count(),
       })
       .from(videos)
-      .where(eq(videos.userId, session.user.id))
+      .where(and(eq(videos.userId, session.user.id), eq(videos.source, 'youtube')))
       .groupBy(videos.categoryId);
 
     let total = 0;

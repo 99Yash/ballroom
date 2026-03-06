@@ -34,3 +34,21 @@ WS4 - X provider integration: DONE
     - src/lib/auth/server.ts (conditionally adds Twitter social provider with tweet.read, users.read, bookmark.read, like.read, offline.access scopes when X env vars are present)
     - src/lib/sources/index.ts (added xProvider export + auto-registration in provider registry)
   Outcome: tsc --noEmit passes cleanly. X provider fully wired into generic sync engine. OAuth flow conditional on env vars — app works without X configured. Error mapping covers 401 (reauth), 403 (scope), 429 (rate limit) with token auto-refresh.
+
+WS5 - API surface and UI evolution: DONE
+  Files created:
+    - src/types/content.ts (ContentItem, SerializedContentItem, serializeContentItem — provider-agnostic content types for generic endpoints)
+    - src/app/api/sync/route.ts (POST /api/sync — source-aware sync endpoint accepting {source, collection, mode}, validates source/collection combos, delegates to runSync engine)
+    - src/app/api/content/route.ts (GET /api/content — paginated multi-source content listing with optional source/collection/category/search filters, full-text search with ranking)
+    - src/app/api/content/counts/route.ts (GET /api/content/counts — aggregate counts with byCategory, bySource, bySourceCollection breakdowns)
+    - src/components/content-card.tsx (ContentCard — multi-source content card with source icon badge, YouTube play overlay, X tweet layout, author/date metadata)
+  Files changed:
+    - src/lib/validations/api.ts (added syncContentSchema with source/collection/mode validation)
+    - src/app/api/sync-status/route.ts (rewritten: source-aware sync status using syncState table, returns bySourceCollection map with lastSyncAt/active/inactive/reachedEnd per source:collection, legacy compat fields preserved)
+    - src/app/api/youtube/sync/route.ts (refactored: now calls runSync directly instead of legacy quickSync/extendedSync, preserves legacy response shape with unliked field)
+    - src/app/api/youtube/videos/route.ts (scoped to source=youtube for backward compat)
+    - src/app/api/youtube/videos/counts/route.ts (scoped to source=youtube for backward compat)
+    - src/components/sync-button.tsx (added source+collection sync actions: YouTube Quick/Extended, X Bookmarks, X Likes in dropdown with source labels and icons)
+    - src/app/dashboard/dashboard-client.tsx (switched to generic /api/content and /api/content/counts endpoints, added source filter pills with per-source counts, uses ContentCard instead of VideoCard, updated empty states and search placeholder)
+    - next.config.ts (added pbs.twimg.com for X/Twitter media images)
+  Outcome: tsc --noEmit passes cleanly. Generic content API surface complete. Dashboard supports mixed-source browsing with source filters. YouTube backward-compat routes preserved. SyncButton supports per-source sync actions.
