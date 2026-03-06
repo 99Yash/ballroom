@@ -22,5 +22,20 @@ export const auth = betterAuth({
       accessType: 'offline',
       prompt: 'consent',
     },
+    ...(env.X_CLIENT_ID && env.X_CLIENT_SECRET
+      ? {
+          twitter: {
+            clientId: env.X_CLIENT_ID,
+            clientSecret: env.X_CLIENT_SECRET,
+            scope: [
+              'tweet.read',
+              'users.read',
+              'bookmark.read',
+              'like.read',
+              'offline.access',
+            ],
+          },
+        }
+      : {}),
   },
 });

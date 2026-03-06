@@ -20,6 +20,10 @@ export const env = createEnv({
     // Better Auth
     BETTER_AUTH_SECRET: z.string().min(1),
 
+    // X (Twitter) OAuth – optional; X features disabled when absent
+    X_CLIENT_ID: z.string().min(1).optional(),
+    X_CLIENT_SECRET: z.string().min(1).optional(),
+
     // Trigger.dev
     TRIGGER_SECRET_KEY: z.string().min(1),
 

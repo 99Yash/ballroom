@@ -95,26 +95,26 @@ Deliver X likes/bookmarks support on top of a scalable, provider-agnostic sync a
 
 - ~~YouTube quick/extended/full sync parity verified.~~
 
-## WS4 - X provider integration
+## ~~WS4 - X provider integration~~ ✅
 
 ### Deliverables
 
-- OAuth provider setup for X with required scopes.
-- Source adapter for:
-  - `x/bookmarks`
-  - `x/likes`
-- Error mapping for 401/403/429 and reauth requirements.
+- ~~OAuth provider setup for X with required scopes.~~
+- ~~Source adapter for:~~
+  - ~~`x/bookmarks`~~
+  - ~~`x/likes`~~
+- ~~Error mapping for 401/403/429 and reauth requirements.~~
 
 ### Proposed modules
 
-- `src/lib/x.ts` (low-level client)
-- `src/lib/sources/x-provider.ts`
-- Auth config updates in `src/lib/auth/server.ts`
-- Env validation updates in `src/lib/env.ts`
+- ~~`src/lib/x.ts` (low-level client)~~
+- ~~`src/lib/sources/x-provider.ts`~~
+- ~~Auth config updates in `src/lib/auth/server.ts`~~
+- ~~Env validation updates in `src/lib/env.ts`~~
 
 ### Acceptance criteria
 
-- User can connect X account and complete sync for bookmarks and likes.
+- ~~User can connect X account and complete sync for bookmarks and likes.~~
 
 ## WS5 - API surface and UI evolution
 
