@@ -97,24 +97,24 @@ Give users a way to link and unlink their X account, and make the sync UI aware 
 - ~~User with X linked sees the existing sync actions unchanged.~~
 - ~~Instance without X configured shows no X-related UI anywhere.~~
 
-### WS4 - Error handling and edge cases
+### ~~WS4 - Error handling and edge cases~~ ✅
 
 #### Deliverables
 
-- Handle OAuth errors during linking (user denied, provider error) with toast notifications.
-- Handle "X account already linked to another user" edge case with a clear error message.
-- Handle disconnect-while-sync-in-progress gracefully (sync fails with auth error, no crash).
-- Handle token expiry post-link: if X token expires and refresh fails, show a "Reconnect X" prompt.
+- ~~Handle OAuth errors during linking (user denied, provider error) with toast notifications.~~
+- ~~Handle "X account already linked to another user" edge case with a clear error message.~~
+- ~~Handle disconnect-while-sync-in-progress gracefully (sync fails with auth error, no crash).~~
+- ~~Handle token expiry post-link: if X token expires and refresh fails, show a "Reconnect X" prompt.~~
 
 #### Proposed changes
 
-- Error handling in `src/components/connected-accounts.tsx` for link/unlink flows.
-- Update sync error handling in `src/components/sync-button.tsx` to detect auth errors and suggest reconnecting.
+- ~~Error handling in `src/components/connected-accounts.tsx` for link/unlink flows.~~
+- ~~Update sync error handling in `src/components/sync-button.tsx` to detect auth errors and suggest reconnecting.~~
 
 #### Acceptance criteria
 
-- No unhandled errors in the link/unlink/sync flows.
-- User always sees an actionable message when something goes wrong.
+- ~~No unhandled errors in the link/unlink/sync flows.~~
+- ~~User always sees an actionable message when something goes wrong.~~
 
 ## Milestones
 

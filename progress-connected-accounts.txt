@@ -18,3 +18,10 @@ WS3 - Sync dropdown connect-awareness [DONE]
     - src/components/sync-button.tsx (uses useConnectedAccounts hook; X section hidden when not configured, shows "Connect X to sync" when not linked, shows sync actions when linked; accepts onConnectX callback)
     - src/app/dashboard/dashboard-client.tsx (passes onConnectX={() => setAccountsOpen(true)} to SyncButton)
   Outcome: tsc --noEmit passes. Sync dropdown adapts to X connection state.
+
+WS4 - Error handling and edge cases [DONE]
+  Files changed:
+    - src/components/connected-accounts.tsx (enhanced handleConnectX with specific error messages for "account already linked" and "denied/cancelled" OAuth errors)
+    - src/components/sync-button.tsx (added code field to errorResponseSchema; detect X auth errors in handleSourceSync and show "Reconnect X" toast action)
+    - src/app/dashboard/dashboard-client.tsx (added useSearchParams + useEffect to detect OAuth callback errors from URL params, shows toast and cleans URL)
+  Outcome: tsc --noEmit passes. All link/unlink/sync error flows produce actionable toast messages. X auth failures prompt reconnection.

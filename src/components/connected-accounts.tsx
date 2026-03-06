@@ -59,9 +59,25 @@ export function ConnectedAccounts({
         callbackURL: '/dashboard',
       });
     } catch (error) {
-      toast.error('Failed to connect X', {
-        description: getErrorMessage(error),
-      });
+      const message = getErrorMessage(error);
+      const lowerMessage = message.toLowerCase();
+      let description = message;
+
+      if (
+        lowerMessage.includes('already linked') ||
+        lowerMessage.includes('already associated')
+      ) {
+        description =
+          'This X account is already linked to another user. Please use a different X account.';
+      } else if (
+        lowerMessage.includes('denied') ||
+        lowerMessage.includes('cancelled') ||
+        lowerMessage.includes('canceled')
+      ) {
+        description = 'Authorization was denied. Please try again.';
+      }
+
+      toast.error('Failed to connect X', { description });
       setIsLinking(false);
     }
   };

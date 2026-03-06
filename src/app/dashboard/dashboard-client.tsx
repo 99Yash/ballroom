@@ -12,7 +12,7 @@ import {
   Youtube,
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { parseAsInteger, parseAsString, useQueryState } from 'nuqs';
 import * as React from 'react';
 import { toast } from 'sonner';
@@ -62,7 +62,41 @@ export function DashboardClient({
   userEmail,
 }: DashboardClientProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [accountsOpen, setAccountsOpen] = React.useState(false);
+
+  // Detect OAuth callback errors (e.g., user denied, provider error, account already linked)
+  React.useEffect(() => {
+    const error = searchParams.get('error');
+    if (!error) return;
+
+    const lowerError = error.toLowerCase();
+    let description = error;
+
+    if (
+      lowerError.includes('denied') ||
+      lowerError.includes('cancelled') ||
+      lowerError.includes('canceled') ||
+      lowerError.includes('access_denied')
+    ) {
+      description = 'Authorization was denied. You can try again from Accounts.';
+    } else if (
+      lowerError.includes('already linked') ||
+      lowerError.includes('already associated')
+    ) {
+      description =
+        'This account is already linked to another user. Please use a different account.';
+    } else if (lowerError.includes('configuration') || lowerError.includes('not configured')) {
+      description = 'OAuth provider is not configured. Please contact the administrator.';
+    }
+
+    toast.error('Account linking failed', { description });
+
+    // Clean the error param from the URL
+    const url = new URL(window.location.href);
+    url.searchParams.delete('error');
+    router.replace(url.pathname + url.search, { scroll: false });
+  }, [searchParams, router]);
   const [items, setItems] = React.useState<SerializedContentItem[]>([]);
   const [categories, setCategories] =
     React.useState<Category[]>(initialCategories);

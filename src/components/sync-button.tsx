@@ -79,6 +79,7 @@ const categorizeResponseSchema = z.object({
 
 const errorResponseSchema = z.object({
   error: z.string().optional(),
+  code: z.string().optional(),
 });
 
 const isDevelopment = process.env.NODE_ENV === 'development';
@@ -164,7 +165,24 @@ export function SyncButton({
       const errorMessage =
         error instanceof Error ? error.message : 'Sync failed';
       setStatus(errorMessage);
-      toast.error('Sync failed', { description: errorMessage });
+
+      const isAuthError =
+        error instanceof Error &&
+        (errorMessage.toLowerCase().includes('authenticate') ||
+          errorMessage.toLowerCase().includes('no x account') ||
+          errorMessage.toLowerCase().includes('token'));
+
+      if (source === 'x' && isAuthError && onConnectX) {
+        toast.error('X authentication failed', {
+          description: 'Your X connection may have expired. Reconnect to continue syncing.',
+          action: {
+            label: 'Reconnect X',
+            onClick: onConnectX,
+          },
+        });
+      } else {
+        toast.error('Sync failed', { description: errorMessage });
+      }
     } finally {
       setIsSyncing(false);
     }
