@@ -5,3 +5,10 @@ WS1 - Domain and contracts: DONE
     - src/lib/sources/normalize.ts (normalizeYouTubeVideo adapter)
     - src/lib/sources/index.ts (barrel export)
   Outcome: tsc --noEmit passes cleanly. Provider-agnostic contracts ready for WS2 (sync engine) and WS4 (X adapter).
+
+WS2 - Data model and storage: DONE
+  Files changed:
+    - src/db/schemas/videos.ts (added contentSourceEnum, collectionTypeEnum, source/collection/externalId/providerMetadata columns to videos table, created sync_state table, added multi-source indexes and unique constraints, exported DatabaseSyncState/NewSyncState types)
+    - src/lib/sync.ts (added source/collection/externalId fields to YouTube insert for backward compat)
+    - drizzle/0009_nice_exiles.sql (migration: create enums, sync_state table, add columns with youtube_id backfill, indexes, unique constraints)
+  Outcome: tsc --noEmit passes cleanly. Migration applied successfully. Existing YouTube upsert path works with new columns (externalId = youtubeId). sync_state table ready for cursor/checkpoint tracking per (userId, source, collection).

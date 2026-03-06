@@ -44,33 +44,33 @@ Deliver X likes/bookmarks support on top of a scalable, provider-agnostic sync a
 
 - ~~Existing YouTube fetch/sync code can be adapted to interfaces with no behavior regression.~~
 
-## WS2 - Data model and storage
+## ~~WS2 - Data model and storage~~ ✅
 
 ### Deliverables
 
-- Normalized content persistence supporting multiple sources and collections.
-- Sync state persistence per `(userId, source, collection)`.
+- ~~Normalized content persistence supporting multiple sources and collections.~~
+- ~~Sync state persistence per `(userId, source, collection)`.~~
 
 ### Schema direction
 
-- Introduce a normalized content table (or equivalent evolution of current `videos` table) with fields like:
-  - `id`, `userId`, `source`, `collection`, `externalId`
-  - `title`, `description/body`, `thumbnailUrl/mediaUrl`
-  - `authorName`, `authorId`, `publishedAt`
-  - `categoryId`, `lastAnalyzedAt`, `syncStatus`, `lastSeenAt`
-  - lifecycle timestamps
-- Introduce sync-state table with:
-  - `userId`, `source`, `collection`, `cursor`, `lastSyncedAt`, `reachedEnd`, `lastError`
+- ~~Introduce a normalized content table (or equivalent evolution of current `videos` table) with fields like:~~
+  - ~~`id`, `userId`, `source`, `collection`, `externalId`~~
+  - ~~`title`, `description/body`, `thumbnailUrl/mediaUrl`~~
+  - ~~`authorName`, `authorId`, `publishedAt`~~
+  - ~~`categoryId`, `lastAnalyzedAt`, `syncStatus`, `lastSeenAt`~~
+  - ~~lifecycle timestamps~~
+- ~~Introduce sync-state table with:~~
+  - ~~`userId`, `source`, `collection`, `cursor`, `lastSyncedAt`, `reachedEnd`, `lastError`~~
 
 ### Indexes
 
-- Unique: `(userId, source, collection, externalId)`
-- Filter/query: `(userId, source, categoryId)`, `(userId, source, createdAt)`, `(userId, syncStatus)`
-- Search vector index on normalized text fields
+- ~~Unique: `(userId, source, collection, externalId)`~~
+- ~~Filter/query: `(userId, source, categoryId)`, `(userId, source, createdAt)`, `(userId, syncStatus)`~~
+- ~~Search vector index on normalized text fields~~
 
 ### Acceptance criteria
 
-- Upsert path is idempotent and query performance remains acceptable under pagination + search.
+- ~~Upsert path is idempotent and query performance remains acceptable under pagination + search.~~
 
 ## WS3 - Sync engine refactor
 

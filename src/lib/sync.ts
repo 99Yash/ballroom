@@ -157,6 +157,9 @@ async function syncBatchToDatabase({
           publishedAt: v.publishedAt,
           syncStatus: VIDEO_SYNC_STATUS.ACTIVE,
           lastSeenAt: syncStartedAt,
+          source: 'youtube' as const,
+          collection: 'likes' as const,
+          externalId: v.youtubeId,
         }))
       )
       .onConflictDoNothing({
