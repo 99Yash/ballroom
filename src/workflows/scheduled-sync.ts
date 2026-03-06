@@ -1,5 +1,5 @@
 import { logger, metadata, schedules, tags } from '@trigger.dev/sdk';
-import { and, asc, eq, gt, inArray, isNotNull } from 'drizzle-orm';
+import { and, asc, gt, inArray, isNotNull } from 'drizzle-orm';
 import { db } from '~/db';
 import { account, user } from '~/db/schemas';
 import type { CollectionType, ContentSource } from '~/lib/sources/types';

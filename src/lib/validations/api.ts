@@ -31,7 +31,7 @@ export const syncVideosSchema = z.object({
 export const syncContentSchema = z.object({
   source: z.enum(['youtube', 'x']),
   collection: z.enum(['likes', 'bookmarks']),
-  mode: z.enum(['quick', 'extended']).default('quick'),
+  mode: z.enum(['quick', 'extended', 'full']).default('quick'),
 });
 
 export const categorizeVideosSchema = z.object({

@@ -54,7 +54,15 @@ interface XApiResponse {
 
 async function getXCredentials(userId: string) {
   const userAccount = await db
-    .select()
+    .select({
+      id: account.id,
+      accountId: account.accountId,
+      accessToken: account.accessToken,
+      refreshToken: account.refreshToken,
+      accessTokenExpiresAt: account.accessTokenExpiresAt,
+      providerId: account.providerId,
+      userId: account.userId,
+    })
     .from(account)
     .where(and(eq(account.userId, userId), eq(account.providerId, 'twitter')))
     .limit(1);
@@ -182,15 +190,17 @@ async function xApiFetch(
   if (response.status === 401) {
     throw new AuthenticationError({
       message: 'X API authentication failed. Please re-authenticate with X.',
-      authErrorType: AUTH_ERROR_TYPES.TOKEN_EXPIRED,
+      authErrorType: acc.refreshToken
+        ? AUTH_ERROR_TYPES.TOKEN_EXPIRED
+        : AUTH_ERROR_TYPES.NO_REFRESH_TOKEN,
     });
   }
 
   if (response.status === 403) {
-    throw new AuthenticationError({
+    throw new AppError({
+      code: 'FORBIDDEN',
       message:
         'X API access forbidden. Your app may lack required scopes — please re-authenticate.',
-      authErrorType: AUTH_ERROR_TYPES.TOKEN_EXPIRED,
     });
   }
 

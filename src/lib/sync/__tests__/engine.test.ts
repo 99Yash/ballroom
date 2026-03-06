@@ -11,6 +11,7 @@ vi.mock('~/lib/sources', () => ({
 vi.mock('../persistence', () => ({
   upsertBatch: vi.fn(),
   saveSyncState: vi.fn(),
+  loadSyncState: vi.fn(),
   getFullSyncCooldownRemaining: vi.fn(),
 }));
 
@@ -52,7 +53,7 @@ vi.mock('~/lib/constants', () => ({
 
 import { providerRegistry } from '~/lib/sources';
 import { runSync } from '../engine';
-import { getFullSyncCooldownRemaining, saveSyncState, upsertBatch } from '../persistence';
+import { getFullSyncCooldownRemaining, loadSyncState, saveSyncState, upsertBatch } from '../persistence';
 import { reconcileInactive } from '../reconcile';
 
 function makeItem(id: string): NormalizedContentItem {
@@ -89,6 +90,7 @@ describe('runSync', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(getFullSyncCooldownRemaining).mockResolvedValue(null);
+    vi.mocked(loadSyncState).mockResolvedValue({ token: null, reachedEnd: true });
     vi.mocked(upsertBatch).mockResolvedValue(0);
     vi.mocked(saveSyncState).mockResolvedValue(undefined);
     vi.mocked(reconcileInactive).mockResolvedValue(0);

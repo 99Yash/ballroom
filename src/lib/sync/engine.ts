@@ -13,6 +13,7 @@ import type {
 import { EMPTY_CURSOR } from '~/lib/sources/types';
 import {
   getFullSyncCooldownRemaining,
+  loadSyncState,
   saveSyncState,
   upsertBatch,
 } from './persistence';
@@ -100,7 +101,15 @@ export async function runSync(
   let totalExisting = 0;
   let consecutiveExistingBatches = 0;
   let reachedEnd = false;
+
+  // Resume from saved cursor for extended/full syncs if the previous sync was interrupted
   let cursor: SyncCursor = EMPTY_CURSOR;
+  if (options.mode !== 'quick') {
+    const saved = await loadSyncState(userId, source, collection);
+    if (!saved.reachedEnd && saved.token !== null) {
+      cursor = saved;
+    }
+  }
 
   logger.info('Starting sync', {
     userId,
