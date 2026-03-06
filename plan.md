@@ -72,28 +72,28 @@ Deliver X likes/bookmarks support on top of a scalable, provider-agnostic sync a
 
 - ~~Upsert path is idempotent and query performance remains acceptable under pagination + search.~~
 
-## WS3 - Sync engine refactor
+## ~~WS3 - Sync engine refactor~~ ✅
 
 ### Deliverables
 
-- Extract generic progressive sync loop from current `src/lib/sync.ts`.
-- Pluggable fetcher + mapper + reconciliation strategy.
+- ~~Extract generic progressive sync loop from current `src/lib/sync.ts`.~~
+- ~~Pluggable fetcher + mapper + reconciliation strategy.~~
 
 ### Proposed modules
 
-- `src/lib/sync/engine.ts`
-- `src/lib/sync/reconcile.ts`
-- `src/lib/sync/persistence.ts`
+- ~~`src/lib/sync/engine.ts`~~
+- ~~`src/lib/sync/reconcile.ts`~~
+- ~~`src/lib/sync/persistence.ts`~~
 
 ### Migration strategy
 
-1. Wrap existing YouTube behavior in new engine first.
-2. Keep `/api/youtube/*` routes working as compatibility layer.
+1. ~~Wrap existing YouTube behavior in new engine first.~~
+2. ~~Keep `/api/youtube/*` routes working as compatibility layer.~~
 3. Add source-aware routes once stable.
 
 ### Acceptance criteria
 
-- YouTube quick/extended/full sync parity verified.
+- ~~YouTube quick/extended/full sync parity verified.~~
 
 ## WS4 - X provider integration
 

@@ -12,3 +12,15 @@ WS2 - Data model and storage: DONE
     - src/lib/sync.ts (added source/collection/externalId fields to YouTube insert for backward compat)
     - drizzle/0009_nice_exiles.sql (migration: create enums, sync_state table, add columns with youtube_id backfill, indexes, unique constraints)
   Outcome: tsc --noEmit passes cleanly. Migration applied successfully. Existing YouTube upsert path works with new columns (externalId = youtubeId). sync_state table ready for cursor/checkpoint tracking per (userId, source, collection).
+
+WS3 - Sync engine refactor: DONE
+  Files created:
+    - src/lib/sync/persistence.ts (loadSyncState, saveSyncState, upsertBatch — generic batch upsert with quota tracking, sync_state CRUD per userId/source/collection)
+    - src/lib/sync/reconcile.ts (reconcileInactive — marks unseen items as inactive, scoped to source/collection)
+    - src/lib/sync/engine.ts (runSync — generic progressive sync loop with mode-based limits, consecutive-existing heuristic, reconciliation on reachedEnd, error state persistence)
+    - src/lib/sync/index.ts (barrel export)
+    - src/lib/sources/youtube-provider.ts (SourceProvider implementation wrapping fetchLikedVideos + normalizeYouTubeVideo)
+  Files changed:
+    - src/lib/sources/index.ts (added youtubeProvider export + auto-registration in provider registry)
+    - src/lib/sync.ts (rewritten as backward-compat layer: quickSync/extendedSync/fullSync/progressiveSync now delegate to runSync engine, map SyncResult.inactive → legacy .unliked field)
+  Outcome: tsc --noEmit passes cleanly. YouTube sync parity maintained — existing API routes and workflows unchanged. Generic engine ready for WS4 (X provider).
