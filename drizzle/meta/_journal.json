@@ -71,6 +71,13 @@
       "when": 1772775079982,
       "tag": "0009_nice_exiles",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1772777034460,
+      "tag": "0010_broad_human_cannonball",
+      "breakpoints": true
     }
   ]
 }

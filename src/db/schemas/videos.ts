@@ -186,6 +186,7 @@ export const syncState = pgTable(
     lastSyncedAt: timestamp('last_synced_at', { withTimezone: true }),
     reachedEnd: boolean('reached_end').default(false).notNull(),
     lastError: text('last_error'),
+    lastFullSyncAt: timestamp('last_full_sync_at', { withTimezone: true }),
     ...lifecycle_dates,
   },
   (table) => [

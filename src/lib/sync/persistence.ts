@@ -43,34 +43,72 @@ export async function loadSyncState(
   };
 }
 
+export interface SaveSyncStateOptions {
+  /** When true, also records the current time as lastFullSyncAt for cooldown tracking. */
+  markFullSync?: boolean;
+}
+
 export async function saveSyncState(
   userId: string,
   source: ContentSource,
   collection: CollectionType,
   cursor: SyncCursor,
-  error?: string | null
+  error?: string | null,
+  options?: SaveSyncStateOptions
 ): Promise<void> {
   const now = new Date();
+  const lastFullSyncAt = options?.markFullSync ? now : undefined;
+
+  const baseValues = {
+    cursor: cursor.token,
+    reachedEnd: cursor.reachedEnd,
+    lastSyncedAt: now,
+    lastError: error ?? null,
+    ...(lastFullSyncAt && { lastFullSyncAt }),
+  };
+
   await db
     .insert(syncState)
     .values({
       userId,
       source,
       collection,
-      cursor: cursor.token,
-      reachedEnd: cursor.reachedEnd,
-      lastSyncedAt: now,
-      lastError: error ?? null,
+      ...baseValues,
     })
     .onConflictDoUpdate({
       target: [syncState.userId, syncState.source, syncState.collection],
-      set: {
-        cursor: cursor.token,
-        reachedEnd: cursor.reachedEnd,
-        lastSyncedAt: now,
-        lastError: error ?? null,
-      },
+      set: baseValues,
     });
+}
+
+/**
+ * Check if a full sync is allowed based on the per-source cooldown.
+ * Returns null if allowed, or the remaining cooldown in ms if not.
+ */
+export async function getFullSyncCooldownRemaining(
+  userId: string,
+  source: ContentSource,
+  collection: CollectionType,
+  cooldownMs: number
+): Promise<number | null> {
+  const [state] = await db
+    .select({ lastFullSyncAt: syncState.lastFullSyncAt })
+    .from(syncState)
+    .where(
+      and(
+        eq(syncState.userId, userId),
+        eq(syncState.source, source),
+        eq(syncState.collection, collection)
+      )
+    )
+    .limit(1);
+
+  if (!state?.lastFullSyncAt) return null;
+
+  const elapsed = Date.now() - state.lastFullSyncAt.getTime();
+  if (elapsed >= cooldownMs) return null;
+
+  return cooldownMs - elapsed;
 }
 
 // ---------------------------------------------------------------------------

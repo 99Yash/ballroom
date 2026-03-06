@@ -142,29 +142,29 @@ Deliver X likes/bookmarks support on top of a scalable, provider-agnostic sync a
 
 - ~~User can browse mixed-source data without confusion.~~
 
-## WS6 - Workflows, quotas, and cost controls
+## ~~WS6 - Workflows, quotas, and cost controls~~ ✅
 
 ### Deliverables
 
-- Source-aware workflow triggers and schedule jobs.
-- Quota model evolves from generic `sync` to source/collection granularity.
-- Budget and warning thresholds for X usage.
+- ~~Source-aware workflow triggers and schedule jobs.~~
+- ~~Quota model evolves from generic `sync` to source/collection granularity.~~
+- ~~Budget and warning thresholds for X usage.~~
 
 ### Workflow updates
 
-- Extend `src/workflows/sync-videos.ts` into source-aware task payloads.
-- Concurrency key format: `userId:source:collection`.
+- ~~Extend `src/workflows/sync-videos.ts` into source-aware task payloads.~~
+- ~~Concurrency key format: `userId:source:collection`.~~
 
 ### Cost controls
 
-- Configurable max pages per run.
-- Deep sync cooldown by source/collection.
-- Daily/monthly usage summary logs.
+- ~~Configurable max pages per run.~~
+- ~~Deep sync cooldown by source/collection.~~
+- ~~Daily/monthly usage summary logs.~~
 
 ### Acceptance criteria
 
-- No concurrent sync race for same user/source/collection.
-- Quota enforcement remains atomic under concurrency.
+- ~~No concurrent sync race for same user/source/collection.~~
+- ~~Quota enforcement remains atomic under concurrency.~~
 
 ## WS7 - Testing, observability, and rollout
 

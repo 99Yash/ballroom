@@ -1,4 +1,6 @@
 import { APP_CONFIG } from '~/lib/constants';
+import type { SourceSyncLimits } from '~/lib/constants';
+import { AppError } from '~/lib/errors';
 import { logger } from '~/lib/logger';
 import { providerRegistry } from '~/lib/sources';
 import type {
@@ -9,7 +11,11 @@ import type {
   SyncResult,
 } from '~/lib/sources/types';
 import { EMPTY_CURSOR } from '~/lib/sources/types';
-import { saveSyncState, upsertBatch } from './persistence';
+import {
+  getFullSyncCooldownRemaining,
+  saveSyncState,
+  upsertBatch,
+} from './persistence';
 import { reconcileInactive } from './reconcile';
 
 export interface SyncEngineOptions {
@@ -17,25 +23,33 @@ export interface SyncEngineOptions {
   checkQuota?: boolean;
 }
 
-function getSyncLimits(mode: SyncMode): {
+function getSourceLimits(source: ContentSource): SourceSyncLimits {
+  return APP_CONFIG.sourceLimits[source];
+}
+
+function getSyncLimits(
+  mode: SyncMode,
+  source: ContentSource
+): {
   initialLimit: number;
   maxDepth: number;
 } {
+  const limits = getSourceLimits(source);
   switch (mode) {
     case 'quick':
       return {
-        initialLimit: APP_CONFIG.sync.quickSyncLimit,
-        maxDepth: APP_CONFIG.sync.progressiveMaxDepth,
+        initialLimit: limits.quickSyncLimit,
+        maxDepth: limits.maxDepth,
       };
     case 'extended':
       return {
-        initialLimit: APP_CONFIG.sync.extendedSyncLimit,
-        maxDepth: APP_CONFIG.sync.progressiveMaxDepth,
+        initialLimit: limits.extendedSyncLimit,
+        maxDepth: limits.maxDepth,
       };
     case 'full':
       return {
-        initialLimit: APP_CONFIG.sync.progressiveMaxDepth,
-        maxDepth: APP_CONFIG.sync.progressiveMaxDepth,
+        initialLimit: limits.maxDepth,
+        maxDepth: limits.maxDepth,
       };
   }
 }
@@ -46,6 +60,8 @@ function getSyncLimits(mode: SyncMode): {
  * Resolves the provider from the registry, fetches pages in a loop,
  * upserts items, and applies reconciliation when the end of the
  * collection is reached.
+ *
+ * Enforces per-source limits (max depth, cooldown for full syncs).
  */
 export async function runSync(
   userId: string,
@@ -54,12 +70,30 @@ export async function runSync(
   options: SyncEngineOptions
 ): Promise<SyncResult> {
   const provider = providerRegistry.resolve(source, collection);
-  const { initialLimit, maxDepth } = getSyncLimits(options.mode);
+  const { initialLimit, maxDepth } = getSyncLimits(options.mode, source);
   const batchSize = APP_CONFIG.sync.batchSize;
   const consecutiveThreshold =
     APP_CONFIG.sync.consecutiveExistingBatchesThreshold;
   const checkQuota = options.checkQuota ?? true;
   const syncStartedAt = new Date();
+
+  // Enforce full-sync cooldown per source/collection
+  if (options.mode === 'full') {
+    const sourceLimits = getSourceLimits(source);
+    const cooldownRemaining = await getFullSyncCooldownRemaining(
+      userId,
+      source,
+      collection,
+      sourceLimits.fullSyncCooldownMs
+    );
+    if (cooldownRemaining !== null) {
+      const cooldownSeconds = Math.ceil(cooldownRemaining / 1000);
+      throw new AppError({
+        code: 'TOO_MANY_REQUESTS',
+        message: `Full sync for ${source}/${collection} is on cooldown. Please wait ${cooldownSeconds} seconds.`,
+      });
+    }
+  }
 
   let totalFetched = 0;
   let totalNew = 0;
@@ -143,11 +177,20 @@ export async function runSync(
       );
     }
 
-    // Persist sync state on success
-    await saveSyncState(userId, source, collection, {
-      token: cursor.token,
-      reachedEnd,
-    });
+    // Persist sync state on success (mark full sync timestamp for cooldown)
+    await saveSyncState(
+      userId,
+      source,
+      collection,
+      {
+        token: cursor.token,
+        reachedEnd,
+      },
+      null,
+      { markFullSync: options.mode === 'full' }
+    );
+
+    const durationMs = Date.now() - syncStartedAt.getTime();
 
     logger.info('Sync completed', {
       userId,
@@ -159,6 +202,7 @@ export async function runSync(
       existing: totalExisting,
       inactive: inactiveCount,
       reachedEnd,
+      durationMs,
     });
 
     return {
@@ -172,6 +216,17 @@ export async function runSync(
       reachedEnd,
     };
   } catch (error) {
+    const durationMs = Date.now() - syncStartedAt.getTime();
+
+    logger.error('Sync failed', {
+      userId,
+      source,
+      collection,
+      mode: options.mode,
+      durationMs,
+      error: error instanceof Error ? error.message : String(error),
+    });
+
     // Persist error state so it's visible in sync status
     await saveSyncState(
       userId,
