@@ -2,8 +2,13 @@ import { and, desc, eq, isNull, sql, type SQL } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
 import { db } from '~/db';
 import { categories, createVideoSearchVector, videos } from '~/db/schemas';
+import {
+  buildPrefixTsquery,
+  handleApiError,
+  parsePagination,
+  validateSearchQuery,
+} from '~/lib/api-utils';
 import { requireSession } from '~/lib/auth/session';
-import { createErrorResponse } from '~/lib/errors';
 import { logger } from '~/lib/logger';
 import {
   COLLECTION_TYPES,
@@ -24,7 +29,6 @@ export async function GET(request: Request) {
     const collectionParam = searchParams.get('collection');
     const categoryId = searchParams.get('categoryId');
     const uncategorized = searchParams.get('uncategorized') === 'true';
-    const rawSearchQuery = searchParams.get('search');
 
     // Validate source/collection if provided
     if (
@@ -46,16 +50,9 @@ export async function GET(request: Request) {
       );
     }
 
-    const MAX_SEARCH_QUERY_LENGTH = 300;
-    if (rawSearchQuery && rawSearchQuery.length > MAX_SEARCH_QUERY_LENGTH) {
-      return NextResponse.json(
-        {
-          error: `Search query is too long. Maximum length is ${MAX_SEARCH_QUERY_LENGTH} characters.`,
-        },
-        { status: 400 }
-      );
-    }
-    const searchQuery = rawSearchQuery?.trim();
+    const { query: searchQuery, errorResponse: searchError } =
+      validateSearchQuery(searchParams);
+    if (searchError) return searchError;
 
     const baseConditions: SQL[] = [eq(videos.userId, session.user.id)];
 
@@ -75,45 +72,19 @@ export async function GET(request: Request) {
       baseConditions.push(eq(videos.categoryId, categoryId));
     }
 
-    let searchExpr: SQL | null = null;
     let searchRank: SQL | null = null;
-    if (searchQuery && searchQuery.length > 0) {
-      const words = searchQuery
-        .split(/\s+/)
-        .filter((w) => w.length > 0)
-        .map((w) => {
-          const escaped = w.replace(/([&|!():\\])/g, '\\$1');
-          return escaped.length > 0 ? `${escaped}:*` : '';
-        })
-        .filter((w) => w.length > 0)
-        .join(' & ');
-
-      const tsquery =
-        words.length > 0
-          ? sql`to_tsquery('simple', ${words})`
-          : sql`plainto_tsquery('simple', ${searchQuery})`;
-
-      searchExpr = createVideoSearchVector(
+    if (searchQuery) {
+      const tsquery = buildPrefixTsquery(searchQuery);
+      const searchExpr = createVideoSearchVector(
         videos.title,
         videos.description,
         videos.channelName
       );
-
-      const searchCondition = sql`${searchExpr} @@ ${tsquery}`;
-      baseConditions.push(searchCondition);
-
+      baseConditions.push(sql`${searchExpr} @@ ${tsquery}`);
       searchRank = sql`ts_rank(${searchExpr}, ${tsquery})`;
     }
 
-    const rawPage = Number(searchParams.get('page') ?? '1');
-    const rawLimit = Number(searchParams.get('limit') ?? '50');
-    const page =
-      Number.isFinite(rawPage) && rawPage >= 1 ? Math.floor(rawPage) : 1;
-    const limit = Math.min(
-      100,
-      Number.isFinite(rawLimit) && rawLimit >= 1 ? Math.floor(rawLimit) : 50
-    );
-    const offset = (page - 1) * limit;
+    const { page, limit, offset } = parsePagination(searchParams);
 
     const queryBuilder = db
       .select({
@@ -168,15 +139,6 @@ export async function GET(request: Request) {
       },
     });
   } catch (error) {
-    const errorResponse = createErrorResponse(error);
-    logger.api('GET', '/api/content', {
-      duration: Date.now() - startTime,
-      status: errorResponse.statusCode,
-      error: error instanceof Error ? error : undefined,
-    });
-    return NextResponse.json(
-      { error: errorResponse.message },
-      { status: errorResponse.statusCode }
-    );
+    return handleApiError(error, 'GET', '/api/content', startTime);
   }
 }

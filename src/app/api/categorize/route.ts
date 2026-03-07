@@ -3,8 +3,9 @@ import { NextResponse } from 'next/server';
 import { db } from '~/db';
 import { categories } from '~/db/schemas';
 import { categorizeUserVideos } from '~/lib/ai/categorize';
+import { handleApiError } from '~/lib/api-utils';
 import { requireSession } from '~/lib/auth/session';
-import { AppError, createErrorResponse } from '~/lib/errors';
+import { AppError } from '~/lib/errors';
 import { logger } from '~/lib/logger';
 import { formatQuotaForClient, getUserQuotas } from '~/lib/quota';
 import {
@@ -98,10 +99,6 @@ export async function POST(request: Request) {
     logger.error('Error categorizing videos', error, {
       duration: Date.now() - startTime,
     });
-    const errorResponse = createErrorResponse(error);
-    return NextResponse.json(
-      { error: errorResponse.message },
-      { status: errorResponse.statusCode }
-    );
+    return handleApiError(error, 'POST', '/api/categorize', startTime);
   }
 }

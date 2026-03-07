@@ -2,8 +2,8 @@ import { and, count, eq, isNull } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
 import { db } from '~/db';
 import { videos } from '~/db/schemas';
+import { handleApiError } from '~/lib/api-utils';
 import { requireSession } from '~/lib/auth/session';
-import { createErrorResponse } from '~/lib/errors';
 import { logger } from '~/lib/logger';
 import {
   COLLECTION_TYPES,
@@ -115,15 +115,6 @@ export async function GET(request: Request) {
       bySourceCollection,
     });
   } catch (error) {
-    const errorResponse = createErrorResponse(error);
-    logger.api('GET', '/api/content/counts', {
-      duration: Date.now() - startTime,
-      status: errorResponse.statusCode,
-      error: error instanceof Error ? error : undefined,
-    });
-    return NextResponse.json(
-      { error: errorResponse.message },
-      { status: errorResponse.statusCode }
-    );
+    return handleApiError(error, 'GET', '/api/content/counts', startTime);
   }
 }

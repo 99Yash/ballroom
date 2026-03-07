@@ -2,11 +2,13 @@ import { eq } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
 import { db } from '~/db';
 import { categories, user } from '~/db/schemas';
+import { handleApiError } from '~/lib/api-utils';
 import { requireSession } from '~/lib/auth/session';
-import { AppError, createErrorResponse } from '~/lib/errors';
+import { AppError } from '~/lib/errors';
 import { logger } from '~/lib/logger';
 import {
   completeOnboardingSchema,
+  parseRequestBody,
   validateRequestBody,
 } from '~/lib/validations/api';
 import { triggerInitialSync } from '~/workflows/sync-videos';
@@ -15,7 +17,7 @@ export async function POST(request: Request) {
   const startTime = Date.now();
   try {
     const session = await requireSession();
-    const body = await request.json();
+    const body = await parseRequestBody(request);
 
     const { categories: categoryNames } = validateRequestBody(
       completeOnboardingSchema,
@@ -93,15 +95,6 @@ export async function POST(request: Request) {
       message: 'Onboarding complete. Initial sync started in background.',
     });
   } catch (error) {
-    const errorResponse = createErrorResponse(error);
-    logger.api('POST', '/api/onboarding/complete', {
-      duration: Date.now() - startTime,
-      status: errorResponse.statusCode,
-      error: error instanceof Error ? error : undefined,
-    });
-    return NextResponse.json(
-      { error: errorResponse.message },
-      { status: errorResponse.statusCode }
-    );
+    return handleApiError(error, 'POST', '/api/onboarding/complete', startTime);
   }
 }

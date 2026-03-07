@@ -2,8 +2,9 @@ import { and, eq } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
 import { db } from '~/db';
 import { categories, categorySelect } from '~/db/schemas';
+import { handleApiError } from '~/lib/api-utils';
 import { requireSession } from '~/lib/auth/session';
-import { AppError, createErrorResponse } from '~/lib/errors';
+import { AppError } from '~/lib/errors';
 import { logger } from '~/lib/logger';
 import {
   parseRequestBody,
@@ -46,16 +47,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    const errorResponse = createErrorResponse(error);
-    logger.api('DELETE', `/api/categories/${id}`, {
-      duration: Date.now() - startTime,
-      status: errorResponse.statusCode,
-      error: error instanceof Error ? error : undefined,
-    });
-    return NextResponse.json(
-      { error: errorResponse.message },
-      { status: errorResponse.statusCode }
-    );
+    return handleApiError(error, 'DELETE', `/api/categories/${id}`, startTime);
   }
 }
 
@@ -120,15 +112,6 @@ export async function PATCH(
 
     return NextResponse.json({ category: updated });
   } catch (error) {
-    const errorResponse = createErrorResponse(error);
-    logger.api('PATCH', `/api/categories/${id}`, {
-      duration: Date.now() - startTime,
-      status: errorResponse.statusCode,
-      error: error instanceof Error ? error : undefined,
-    });
-    return NextResponse.json(
-      { error: errorResponse.message },
-      { status: errorResponse.statusCode }
-    );
+    return handleApiError(error, 'PATCH', `/api/categories/${id}`, startTime);
   }
 }

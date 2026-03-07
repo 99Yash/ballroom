@@ -96,122 +96,35 @@ function getNextQuotaResetDate(): Date {
   return resetDate;
 }
 
-export async function getUserQuotas(userId: string): Promise<UserQuotas> {
-  const nextResetDate = getNextQuotaResetDate();
-  await db
-    .update(user)
-    .set(buildQuotaResetValues(nextResetDate))
-    .where(buildQuotaResetNeededCondition(userId));
+// ---------------------------------------------------------------------------
+// Shared quota helpers
+// ---------------------------------------------------------------------------
 
-  const [userData] = await db
-    .select({
-      syncQuotaUsed: user.syncQuotaUsed,
-      syncQuotaLimit: user.syncQuotaLimit,
-      categorizeQuotaUsed: user.categorizeQuotaUsed,
-      categorizeQuotaLimit: user.categorizeQuotaLimit,
-      quotaResetAt: user.quotaResetAt,
-    })
-    .from(user)
-    .where(eq(user.id, userId))
-    .limit(1);
+type QuotaUserData = {
+  syncQuotaUsed: number;
+  syncQuotaLimit: number;
+  categorizeQuotaUsed: number;
+  categorizeQuotaLimit: number;
+};
 
-  if (!userData) {
-    throw new AppError({ code: 'NOT_FOUND', message: 'User not found' });
-  }
+const QUOTA_SELECT = {
+  syncQuotaUsed: user.syncQuotaUsed,
+  syncQuotaLimit: user.syncQuotaLimit,
+  categorizeQuotaUsed: user.categorizeQuotaUsed,
+  categorizeQuotaLimit: user.categorizeQuotaLimit,
+} as const;
 
-  return {
-    sync: createQuotaStatus(
-      userData.syncQuotaUsed,
-      userData.syncQuotaLimit,
-      userData.quotaResetAt
-    ),
-    categorize: createQuotaStatus(
-      userData.categorizeQuotaUsed,
-      userData.categorizeQuotaLimit,
-      userData.quotaResetAt
-    ),
-  };
-}
-
-export async function checkAndIncrementQuotaWithinTx(
-  tx: TransactionContext,
-  userId: string,
-  quotaType: QuotaType,
-  amount: number
-): Promise<void> {
+function validateQuotaAmount(amount: number): void {
   if (amount < 0) {
     throw new AppError({
       code: 'BAD_REQUEST',
       message: `Invalid quota amount: ${amount}. Amount must be non-negative.`,
     });
   }
-  if (amount === 0) return;
-
-  const nextResetDate = getNextQuotaResetDate();
-  await tx
-    .update(user)
-    .set(buildQuotaResetValues(nextResetDate))
-    .where(buildQuotaResetNeededCondition(userId));
-  const update = await tx
-    .update(user)
-    .set(buildQuotaIncrementUpdate(quotaType, amount))
-    .where(
-      and(eq(user.id, userId), buildQuotaLimitCheckCondition(quotaType, amount))
-    )
-    .returning({ id: user.id });
-
-  if (update.length === 1) {
-    logger.debug('Quota checked and incremented in transaction', {
-      userId,
-      quotaType,
-      amount,
-    });
-    return;
-  }
-
-  const [current] = await tx
-    .select({
-      syncQuotaUsed: user.syncQuotaUsed,
-      syncQuotaLimit: user.syncQuotaLimit,
-      categorizeQuotaUsed: user.categorizeQuotaUsed,
-      categorizeQuotaLimit: user.categorizeQuotaLimit,
-    })
-    .from(user)
-    .where(eq(user.id, userId))
-    .limit(1);
-
-  if (!current) {
-    throw new AppError({
-      code: 'NOT_FOUND',
-      message: `User not found: ${userId}`,
-    });
-  }
-
-  const { used, limit } = getQuotaValues(current, quotaType);
-
-  logger.debug('Quota check failed - limit exceeded', {
-    userId,
-    quotaType,
-    requestedAmount: amount,
-    currentUsed: used,
-    limit,
-  });
-
-  throw new AppError({
-    code: 'QUOTA_EXCEEDED',
-    message: `${getQuotaTypeDisplayName(
-      quotaType
-    )} quota exceeded. Used: ${used}/${limit}. Resets monthly.`,
-  });
 }
 
 function getQuotaValues(
-  userData: {
-    syncQuotaUsed: number;
-    syncQuotaLimit: number;
-    categorizeQuotaUsed: number;
-    categorizeQuotaLimit: number;
-  },
+  userData: QuotaUserData,
   quotaType: QuotaType
 ): { used: number; limit: number } {
   return quotaType === 'sync'
@@ -259,18 +172,143 @@ function buildQuotaIncrementUpdate(quotaType: QuotaType, amount: number) {
     : { categorizeQuotaUsed: sql`${user.categorizeQuotaUsed} + ${amount}` };
 }
 
+/**
+ * Reset quotas if needed, then try to increment with limit check.
+ * Returns the update result rows (length 1 = success, 0 = limit exceeded).
+ */
+async function resetAndTryIncrement(
+  tx: TransactionContext,
+  userId: string,
+  quotaType: QuotaType,
+  amount: number
+): Promise<QuotaUserData[]> {
+  const nextResetDate = getNextQuotaResetDate();
+  await tx
+    .update(user)
+    .set(buildQuotaResetValues(nextResetDate))
+    .where(buildQuotaResetNeededCondition(userId));
+
+  return tx
+    .update(user)
+    .set(buildQuotaIncrementUpdate(quotaType, amount))
+    .where(
+      and(eq(user.id, userId), buildQuotaLimitCheckCondition(quotaType, amount))
+    )
+    .returning(QUOTA_SELECT);
+}
+
+/**
+ * Select current quota values and throw QUOTA_EXCEEDED.
+ * Called when a guarded increment fails (limit would be exceeded).
+ */
+async function throwQuotaExceeded(
+  tx: TransactionContext,
+  userId: string,
+  quotaType: QuotaType,
+  amount: number
+): Promise<never> {
+  const [current] = await tx
+    .select(QUOTA_SELECT)
+    .from(user)
+    .where(eq(user.id, userId))
+    .limit(1);
+
+  if (!current) {
+    throw new AppError({
+      code: 'NOT_FOUND',
+      message: `User not found: ${userId}`,
+    });
+  }
+
+  const { used, limit } = getQuotaValues(current, quotaType);
+
+  logger.debug('Quota limit exceeded', {
+    userId,
+    quotaType,
+    requestedAmount: amount,
+    currentUsed: used,
+    limit,
+  });
+
+  throw new AppError({
+    code: 'QUOTA_EXCEEDED',
+    message: `${getQuotaTypeDisplayName(
+      quotaType
+    )} quota exceeded. Used: ${used}/${limit}. Resets monthly.`,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
+
+export async function getUserQuotas(userId: string): Promise<UserQuotas> {
+  const nextResetDate = getNextQuotaResetDate();
+  await db
+    .update(user)
+    .set(buildQuotaResetValues(nextResetDate))
+    .where(buildQuotaResetNeededCondition(userId));
+
+  const [userData] = await db
+    .select({
+      syncQuotaUsed: user.syncQuotaUsed,
+      syncQuotaLimit: user.syncQuotaLimit,
+      categorizeQuotaUsed: user.categorizeQuotaUsed,
+      categorizeQuotaLimit: user.categorizeQuotaLimit,
+      quotaResetAt: user.quotaResetAt,
+    })
+    .from(user)
+    .where(eq(user.id, userId))
+    .limit(1);
+
+  if (!userData) {
+    throw new AppError({ code: 'NOT_FOUND', message: 'User not found' });
+  }
+
+  return {
+    sync: createQuotaStatus(
+      userData.syncQuotaUsed,
+      userData.syncQuotaLimit,
+      userData.quotaResetAt
+    ),
+    categorize: createQuotaStatus(
+      userData.categorizeQuotaUsed,
+      userData.categorizeQuotaLimit,
+      userData.quotaResetAt
+    ),
+  };
+}
+
+export async function checkAndIncrementQuotaWithinTx(
+  tx: TransactionContext,
+  userId: string,
+  quotaType: QuotaType,
+  amount: number
+): Promise<void> {
+  validateQuotaAmount(amount);
+  if (amount === 0) return;
+
+  const update = await resetAndTryIncrement(tx, userId, quotaType, amount);
+
+  if (update.length === 1) {
+    logger.debug('Quota checked and incremented in transaction', {
+      userId,
+      quotaType,
+      amount,
+    });
+    return;
+  }
+
+  return throwQuotaExceeded(tx, userId, quotaType, amount);
+}
+
 export async function incrementQuotaWithinTx(
   tx: TransactionContext,
   userId: string,
   quotaType: QuotaType,
   amount: number
 ): Promise<void> {
-  if (amount < 0) {
-    throw new AppError({
-      code: 'BAD_REQUEST',
-      message: `Invalid quota amount: ${amount}. Amount must be non-negative.`,
-    });
-  }
+  validateQuotaAmount(amount);
   if (amount === 0) return;
 
   const update = await tx
@@ -308,12 +346,7 @@ export async function reserveQuota(
   quotaType: QuotaType,
   amount: number
 ): Promise<{ reserved: number; newUsed: number; limit: number }> {
-  if (amount < 0) {
-    throw new AppError({
-      code: 'BAD_REQUEST',
-      message: `Invalid quota amount: ${amount}. Amount must be non-negative.`,
-    });
-  }
+  validateQuotaAmount(amount);
   if (amount === 0) {
     const quotas = await getUserQuotas(userId);
     const quota = quotaType === 'sync' ? quotas.sync : quotas.categorize;
@@ -321,27 +354,7 @@ export async function reserveQuota(
   }
 
   return db.transaction(async (tx) => {
-    const nextResetDate = getNextQuotaResetDate();
-    await tx
-      .update(user)
-      .set(buildQuotaResetValues(nextResetDate))
-      .where(buildQuotaResetNeededCondition(userId));
-
-    const update = await tx
-      .update(user)
-      .set(buildQuotaIncrementUpdate(quotaType, amount))
-      .where(
-        and(
-          eq(user.id, userId),
-          buildQuotaLimitCheckCondition(quotaType, amount)
-        )
-      )
-      .returning({
-        syncQuotaUsed: user.syncQuotaUsed,
-        syncQuotaLimit: user.syncQuotaLimit,
-        categorizeQuotaUsed: user.categorizeQuotaUsed,
-        categorizeQuotaLimit: user.categorizeQuotaLimit,
-      });
+    const update = await resetAndTryIncrement(tx, userId, quotaType, amount);
 
     if (update.length === 1) {
       const { used, limit } = getQuotaValues(update[0]!, quotaType);
@@ -355,58 +368,23 @@ export async function reserveQuota(
       return { reserved: amount, newUsed: used, limit };
     }
 
-    const [current] = await tx
-      .select({
-        syncQuotaUsed: user.syncQuotaUsed,
-        syncQuotaLimit: user.syncQuotaLimit,
-        categorizeQuotaUsed: user.categorizeQuotaUsed,
-        categorizeQuotaLimit: user.categorizeQuotaLimit,
-      })
-      .from(user)
-      .where(eq(user.id, userId))
-      .limit(1);
-
-    if (!current) {
-      throw new AppError({
-        code: 'NOT_FOUND',
-        message: `User not found: ${userId}`,
-      });
-    }
-
-    const { used, limit } = getQuotaValues(current, quotaType);
-
-    logger.debug('Quota reservation failed - limit exceeded', {
-      userId,
-      quotaType,
-      requestedAmount: amount,
-      currentUsed: used,
-      limit,
-    });
-
-    throw new AppError({
-      code: 'QUOTA_EXCEEDED',
-      message: `${getQuotaTypeDisplayName(
-        quotaType
-      )} quota exceeded. Used: ${used}/${limit}. Resets monthly.`,
-    });
+    return throwQuotaExceeded(tx, userId, quotaType, amount);
   });
+}
+
+function formatQuotaStatus(status: QuotaStatus) {
+  return {
+    used: status.used,
+    limit: status.limit,
+    remaining: status.remaining,
+    percentageUsed: status.percentageUsed,
+    resetAt: status.resetAt?.toISOString() ?? null,
+  };
 }
 
 export function formatQuotaForClient(quotas: UserQuotas): ClientQuotaState {
   return {
-    sync: {
-      used: quotas.sync.used,
-      limit: quotas.sync.limit,
-      remaining: quotas.sync.remaining,
-      percentageUsed: quotas.sync.percentageUsed,
-      resetAt: quotas.sync.resetAt?.toISOString() ?? null,
-    },
-    categorize: {
-      used: quotas.categorize.used,
-      limit: quotas.categorize.limit,
-      remaining: quotas.categorize.remaining,
-      percentageUsed: quotas.categorize.percentageUsed,
-      resetAt: quotas.categorize.resetAt?.toISOString() ?? null,
-    },
+    sync: formatQuotaStatus(quotas.sync),
+    categorize: formatQuotaStatus(quotas.categorize),
   };
 }

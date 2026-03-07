@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
+import { handleApiError } from '~/lib/api-utils';
 import { requireSession } from '~/lib/auth/session';
-import { createErrorResponse } from '~/lib/errors';
 import { logger } from '~/lib/logger';
 import { formatQuotaForClient, getUserQuotas } from '~/lib/quota';
 import { isValidSourceCollection } from '~/lib/sources/types';
@@ -82,10 +82,6 @@ export async function POST(request: Request) {
     logger.error('Error syncing content', error, {
       duration: Date.now() - startTime,
     });
-    const errorResponse = createErrorResponse(error);
-    return NextResponse.json(
-      { error: errorResponse.message, code: errorResponse.code },
-      { status: errorResponse.statusCode }
-    );
+    return handleApiError(error, 'POST', '/api/sync', startTime);
   }
 }

@@ -2,18 +2,9 @@ import { and, count, eq } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
 import { db } from '~/db';
 import { videos } from '~/db/schemas';
+import { handleApiError } from '~/lib/api-utils';
 import { requireSession } from '~/lib/auth/session';
-import { createErrorResponse } from '~/lib/errors';
 import { logger } from '~/lib/logger';
-
-interface CountsResponse {
-  /** Total number of videos */
-  total: number;
-  /** Videos without a category assigned */
-  uncategorized: number;
-  /** Count per category, keyed by categoryId */
-  byCategory: Record<string, number>;
-}
 
 export async function GET() {
   const startTime = Date.now();
@@ -45,12 +36,6 @@ export async function GET() {
       }
     }
 
-    const response = {
-      total,
-      uncategorized,
-      byCategory,
-    };
-
     logger.api('GET', '/api/youtube/videos/counts', {
       userId: session.user.id,
       duration: Date.now() - startTime,
@@ -58,17 +43,8 @@ export async function GET() {
       categoryCount: Object.keys(byCategory).length,
     });
 
-    return NextResponse.json(response);
+    return NextResponse.json({ total, uncategorized, byCategory });
   } catch (error) {
-    const errorResponse = createErrorResponse(error);
-    logger.api('GET', '/api/youtube/videos/counts', {
-      duration: Date.now() - startTime,
-      status: errorResponse.statusCode,
-      error: error instanceof Error ? error : undefined,
-    });
-    return NextResponse.json(
-      { error: errorResponse.message },
-      { status: errorResponse.statusCode }
-    );
+    return handleApiError(error, 'GET', '/api/youtube/videos/counts', startTime);
   }
 }

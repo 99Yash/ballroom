@@ -2,9 +2,9 @@ import { eq } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
 import { db } from '~/db';
 import { account } from '~/db/schemas';
+import { handleApiError } from '~/lib/api-utils';
 import { requireSession } from '~/lib/auth/session';
 import { isXConfigured } from '~/lib/auth/x-availability';
-import { createErrorResponse } from '~/lib/errors';
 import { logger } from '~/lib/logger';
 
 export async function GET() {
@@ -37,15 +37,6 @@ export async function GET() {
       xConfigured: isXConfigured(),
     });
   } catch (error) {
-    const errorResponse = createErrorResponse(error);
-    logger.api('GET', '/api/accounts', {
-      duration: Date.now() - startTime,
-      status: errorResponse.statusCode,
-      error: error instanceof Error ? error : undefined,
-    });
-    return NextResponse.json(
-      { error: errorResponse.message },
-      { status: errorResponse.statusCode }
-    );
+    return handleApiError(error, 'GET', '/api/accounts', startTime);
   }
 }

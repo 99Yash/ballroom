@@ -7,8 +7,9 @@ import {
   DEFAULT_CATEGORIES,
 } from '~/db/schemas';
 import { validateCategoryName } from '~/lib/ai/categorize';
+import { handleApiError } from '~/lib/api-utils';
 import { requireSession } from '~/lib/auth/session';
-import { AppError, createErrorResponse } from '~/lib/errors';
+import { AppError } from '~/lib/errors';
 import { logger } from '~/lib/logger';
 import {
   createCategorySchema,
@@ -35,16 +36,7 @@ export async function GET() {
 
     return NextResponse.json({ categories: userCategories });
   } catch (error) {
-    const errorResponse = createErrorResponse(error);
-    logger.api('GET', '/api/categories', {
-      duration: Date.now() - startTime,
-      status: errorResponse.statusCode,
-      error: error instanceof Error ? error : undefined,
-    });
-    return NextResponse.json(
-      { error: errorResponse.message },
-      { status: errorResponse.statusCode }
-    );
+    return handleApiError(error, 'GET', '/api/categories', startTime);
   }
 }
 
@@ -108,16 +100,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ category: newCategory });
   } catch (error) {
-    const errorResponse = createErrorResponse(error);
-    logger.api('POST', '/api/categories', {
-      duration: Date.now() - startTime,
-      status: errorResponse.statusCode,
-      error: error instanceof Error ? error : undefined,
-    });
-    return NextResponse.json(
-      { error: errorResponse.message },
-      { status: errorResponse.statusCode }
-    );
+    return handleApiError(error, 'POST', '/api/categories', startTime);
   }
 }
 
