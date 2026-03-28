@@ -21,6 +21,7 @@ import { ConnectedAccounts } from '~/components/connected-accounts';
 import { ContentCard } from '~/components/content-card';
 import { QuotaDisplay } from '~/components/quota-display';
 import { SyncButton } from '~/components/sync-button';
+import { useSmartSync } from '~/hooks/use-smart-sync';
 import { Button } from '~/components/ui/button';
 import { Input } from '~/components/ui/input';
 import { authClient } from '~/lib/auth/client';
@@ -237,6 +238,8 @@ export function DashboardClient({
     fetchCounts();
     router.refresh();
   };
+
+  useSmartSync({ onNewContent: handleRefresh });
 
   const handleCategoryChange = React.useCallback(
     (categoryId: string | null) => {

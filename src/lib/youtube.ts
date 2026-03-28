@@ -17,7 +17,7 @@ export interface YouTubeVideo {
   publishedAt: Date;
 }
 
-async function createYouTubeClient(userId: string) {
+export async function createYouTubeClient(userId: string) {
   const userAccount = await db
     .select()
     .from(account)
@@ -279,5 +279,143 @@ export async function fetchLikedVideos(
       message: 'Failed to fetch videos from YouTube. Please try again later.',
       cause: error,
     });
+  }
+}
+
+function handleYouTubeApiError(
+  error: unknown,
+  userId: string,
+  operation: string
+): never {
+  if (error instanceof AuthenticationError || error instanceof AppError) {
+    throw error;
+  }
+
+  if (error && typeof error === 'object' && 'code' in error) {
+    const apiError = error as { code?: number; message?: string };
+
+    if (apiError.code === 429) {
+      throw new AppError({
+        code: 'TOO_MANY_REQUESTS',
+        message: `YouTube API rate limit exceeded during ${operation}.`,
+        cause: error,
+      });
+    }
+
+    if (apiError.code === 401) {
+      throw new AuthenticationError({
+        message: 'YouTube API authentication failed. Please re-authenticate.',
+        authErrorType: AUTH_ERROR_TYPES.TOKEN_EXPIRED,
+        cause: error,
+      });
+    }
+
+    if (apiError.code === 403) {
+      if (apiError.message?.toLowerCase().includes('quota')) {
+        throw new AppError({
+          code: 'TOO_MANY_REQUESTS',
+          message: 'YouTube API quota exceeded. Please try again later.',
+          cause: error,
+        });
+      }
+      throw new AuthenticationError({
+        message:
+          'YouTube API access forbidden. You may need to re-authenticate with updated permissions.',
+        authErrorType: AUTH_ERROR_TYPES.TOKEN_EXPIRED,
+        cause: error,
+      });
+    }
+  }
+
+  logger.error(`Unexpected error during ${operation}`, error, { userId });
+  throw new AppError({
+    code: 'INTERNAL_SERVER_ERROR',
+    message: `Failed to ${operation}. Please try again later.`,
+    cause: error,
+  });
+}
+
+/**
+ * Create a YouTube playlist for a category.
+ * Returns the playlist ID.
+ */
+export async function createPlaylist(
+  userId: string,
+  title: string,
+  description?: string
+): Promise<string> {
+  const yt = await createYouTubeClient(userId);
+
+  try {
+    const response = await yt.playlists.insert({
+      part: ['snippet', 'status'],
+      requestBody: {
+        snippet: {
+          title,
+          description: description || `Auto-managed playlist for "${title}"`,
+        },
+        status: {
+          privacyStatus: 'private',
+        },
+      },
+    });
+
+    const playlistId = response.data.id;
+    if (!playlistId) {
+      throw new AppError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'YouTube API returned empty playlist ID',
+      });
+    }
+
+    logger.info('Created YouTube playlist', { userId, playlistId, title });
+    return playlistId;
+  } catch (error) {
+    return handleYouTubeApiError(error, userId, 'create playlist');
+  }
+}
+
+/**
+ * Add a video to a YouTube playlist.
+ * Returns the playlist item ID (used for dedup and future removal).
+ */
+export async function addVideoToPlaylist(
+  userId: string,
+  playlistId: string,
+  videoId: string
+): Promise<string> {
+  const yt = await createYouTubeClient(userId);
+
+  try {
+    const response = await yt.playlistItems.insert({
+      part: ['snippet'],
+      requestBody: {
+        snippet: {
+          playlistId,
+          resourceId: {
+            kind: 'youtube#video',
+            videoId,
+          },
+        },
+      },
+    });
+
+    const itemId = response.data.id;
+    if (!itemId) {
+      throw new AppError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'YouTube API returned empty playlist item ID',
+      });
+    }
+
+    logger.debug('Added video to YouTube playlist', {
+      userId,
+      playlistId,
+      videoId,
+      itemId,
+    });
+    return itemId;
+  } catch (error) {
+    return handleYouTubeApiError(error, userId, 'add video to playlist');
   }
 }
