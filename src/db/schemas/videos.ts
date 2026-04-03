@@ -113,6 +113,7 @@ export const videos = pgTable(
     collection: collectionTypeEnum('collection').default('likes').notNull(),
     externalId: text('external_id').notNull(),
     providerMetadata: jsonb('provider_metadata'),
+    youtubePlaylistItemId: text('youtube_playlist_item_id'),
     ...lifecycle_dates,
   },
   (table) => [

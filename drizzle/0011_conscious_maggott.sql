@@ -1,0 +1,1 @@
+ALTER TABLE "videos" ADD COLUMN "youtube_playlist_item_id" text;
