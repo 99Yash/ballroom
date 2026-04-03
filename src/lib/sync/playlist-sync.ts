@@ -1,9 +1,13 @@
-import { and, eq, isNotNull, isNull } from 'drizzle-orm';
+import { and, count, eq, inArray, isNotNull, isNull } from 'drizzle-orm';
 import { db } from '~/db';
 import { categories, videos } from '~/db/schemas';
 import { VIDEO_SYNC_STATUS } from '~/lib/constants';
 import { logger } from '~/lib/logger';
-import { addVideoToPlaylist, createPlaylist } from '~/lib/youtube';
+import {
+  addVideoToPlaylist,
+  createPlaylist,
+  createYouTubeClient,
+} from '~/lib/youtube';
 
 export interface PlaylistSyncResult {
   synced: number;
@@ -24,33 +28,42 @@ export async function syncToPlaylists(
   /** Max videos to add per call. Keeps YouTube API quota usage in check (50 units per insert). */
   limit: number = 10
 ): Promise<PlaylistSyncResult> {
-  // Find YouTube videos that are categorized but not yet in a playlist
-  const videosToSync = await db
-    .select({
-      id: videos.id,
-      externalId: videos.externalId,
-      categoryId: videos.categoryId,
-    })
-    .from(videos)
-    .where(
-      and(
-        eq(videos.userId, userId),
-        eq(videos.source, 'youtube'),
-        eq(videos.syncStatus, VIDEO_SYNC_STATUS.ACTIVE),
-        isNotNull(videos.categoryId),
-        isNull(videos.youtubePlaylistItemId)
-      )
-    );
+  const pendingFilter = and(
+    eq(videos.userId, userId),
+    eq(videos.source, 'youtube'),
+    eq(videos.syncStatus, VIDEO_SYNC_STATUS.ACTIVE),
+    isNotNull(videos.categoryId),
+    isNull(videos.youtubePlaylistItemId)
+  );
 
-  if (videosToSync.length === 0) {
+  // Get total count and limited batch in parallel
+  const [countResult, batch] = await Promise.all([
+    db
+      .select({ total: count() })
+      .from(videos)
+      .where(pendingFilter),
+    db
+      .select({
+        id: videos.id,
+        externalId: videos.externalId,
+        categoryId: videos.categoryId,
+      })
+      .from(videos)
+      .where(pendingFilter)
+      .orderBy(videos.createdAt)
+      .limit(limit),
+  ]);
+
+  const totalPending = countResult[0]?.total ?? 0;
+
+  if (batch.length === 0) {
     return { synced: 0, playlistsCreated: 0, failed: 0, remaining: 0 };
   }
 
-  const totalPending = videosToSync.length;
-  // Cap to limit to avoid blowing YouTube API quota
-  const batch = videosToSync.slice(0, limit);
+  // Create YouTube client once for the entire sync run
+  const yt = await createYouTubeClient(userId);
 
-  // Load user categories that have videos to sync
+  // Load only categories referenced by this batch
   const categoryIds = [...new Set(batch.map((v) => v.categoryId!))];
   const userCategories = await db
     .select({
@@ -59,7 +72,9 @@ export async function syncToPlaylists(
       youtubePlaylistId: categories.youtubePlaylistId,
     })
     .from(categories)
-    .where(eq(categories.userId, userId));
+    .where(
+      and(eq(categories.userId, userId), inArray(categories.id, categoryIds))
+    );
 
   const categoryMap = new Map(userCategories.map((c) => [c.id, c]));
 
@@ -74,13 +89,33 @@ export async function syncToPlaylists(
 
     if (!cat.youtubePlaylistId) {
       try {
-        const playlistId = await createPlaylist(userId, cat.name);
-        await db
+        const playlistId = await createPlaylist(userId, cat.name, undefined, yt);
+        const updated = await db
           .update(categories)
           .set({ youtubePlaylistId: playlistId })
-          .where(eq(categories.id, catId));
-        cat.youtubePlaylistId = playlistId;
-        playlistsCreated++;
+          .where(
+            and(
+              eq(categories.id, catId),
+              eq(categories.userId, userId),
+              isNull(categories.youtubePlaylistId)
+            )
+          )
+          .returning({ id: categories.id });
+
+        if (updated.length > 0) {
+          cat.youtubePlaylistId = playlistId;
+          playlistsCreated++;
+        } else {
+          // Another request already created a playlist — re-read it
+          const existing = await db
+            .select({ youtubePlaylistId: categories.youtubePlaylistId })
+            .from(categories)
+            .where(
+              and(eq(categories.id, catId), eq(categories.userId, userId))
+            )
+            .limit(1);
+          cat.youtubePlaylistId = existing[0]?.youtubePlaylistId ?? null;
+        }
       } catch (error) {
         logger.error('Failed to create playlist for category', error, {
           userId,
@@ -102,7 +137,8 @@ export async function syncToPlaylists(
       const itemId = await addVideoToPlaylist(
         userId,
         cat.youtubePlaylistId,
-        video.externalId
+        video.externalId,
+        yt
       );
 
       await db

@@ -197,88 +197,7 @@ export async function fetchLikedVideos(
       totalResults: response.data.pageInfo?.totalResults || 0,
     };
   } catch (error) {
-    if (error instanceof AuthenticationError) {
-      throw error;
-    }
-
-    if (error && typeof error === 'object' && 'code' in error) {
-      const apiError = error as { code?: number; message?: string };
-
-      if (apiError.code === 429) {
-        logger.warn('YouTube API rate limit exceeded', { userId });
-        throw new AppError({
-          code: 'TOO_MANY_REQUESTS',
-          message:
-            'YouTube API rate limit exceeded. Please wait a moment and try again.',
-          cause: error,
-        });
-      }
-
-      if (apiError.code === 401) {
-        logger.error('YouTube API authentication failed', {
-          userId,
-          code: apiError.code,
-        });
-        throw new AuthenticationError({
-          message:
-            'YouTube API authentication failed. Please re-authenticate with Google.',
-          authErrorType: AUTH_ERROR_TYPES.TOKEN_EXPIRED,
-          cause: error,
-        });
-      }
-
-      if (apiError.code === 403) {
-        if (apiError.message?.toLowerCase().includes('quota')) {
-          logger.error('YouTube API quota exceeded', { userId });
-          throw new AppError({
-            code: 'TOO_MANY_REQUESTS',
-            message:
-              'YouTube API quota exceeded. Please try again later or contact support.',
-            cause: error,
-          });
-        }
-
-        logger.error('YouTube API access forbidden', {
-          userId,
-          code: apiError.code,
-        });
-        throw new AuthenticationError({
-          message:
-            'YouTube API access forbidden. Please re-authenticate with Google.',
-          authErrorType: AUTH_ERROR_TYPES.TOKEN_EXPIRED,
-          cause: error,
-        });
-      }
-    }
-
-    if (error instanceof Error) {
-      const isNetworkError =
-        error.message.includes('ECONNRESET') ||
-        error.message.includes('ETIMEDOUT') ||
-        error.message.includes('ENOTFOUND') ||
-        error.message.includes('network') ||
-        error.message.includes('timeout');
-
-      if (isNetworkError) {
-        logger.error('Network error while fetching YouTube videos', {
-          userId,
-          error: error.message,
-        });
-        throw new AppError({
-          code: 'TIMEOUT',
-          message:
-            'Network error while fetching videos. Please check your connection and try again.',
-          cause: error,
-        });
-      }
-    }
-
-    logger.error('Unexpected error fetching YouTube videos', error, { userId });
-    throw new AppError({
-      code: 'INTERNAL_SERVER_ERROR',
-      message: 'Failed to fetch videos from YouTube. Please try again later.',
-      cause: error,
-    });
+    return handleYouTubeApiError(error, userId, 'fetch liked videos');
   }
 }
 
@@ -342,9 +261,10 @@ function handleYouTubeApiError(
 export async function createPlaylist(
   userId: string,
   title: string,
-  description?: string
+  description?: string,
+  existingClient?: Awaited<ReturnType<typeof createYouTubeClient>>
 ): Promise<string> {
-  const yt = await createYouTubeClient(userId);
+  const yt = existingClient ?? (await createYouTubeClient(userId));
 
   try {
     const response = await yt.playlists.insert({
@@ -382,9 +302,10 @@ export async function createPlaylist(
 export async function addVideoToPlaylist(
   userId: string,
   playlistId: string,
-  videoId: string
+  videoId: string,
+  existingClient?: Awaited<ReturnType<typeof createYouTubeClient>>
 ): Promise<string> {
-  const yt = await createYouTubeClient(userId);
+  const yt = existingClient ?? (await createYouTubeClient(userId));
 
   try {
     const response = await yt.playlistItems.insert({
